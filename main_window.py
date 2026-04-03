@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem, QFileDialog, QStatusBar, QMenuBar,
     QMenu, QGroupBox, QTextEdit, QComboBox, QFrame,
     QSizePolicy, QHeaderView, QTabWidget, QTableWidget,
-    QTableWidgetItem
+    QTableWidgetItem, QDialog, QTextBrowser
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon
@@ -1065,7 +1065,9 @@ class ModelsPanel(QWidget):
         self._models_data: dict = {}
         self._inpa_path: str = ""
         self._ecu_path: str = ""
+        self._parser = None
         self._current_entry: dict | None = None
+        self._current_model_name: str = ""
         self._setup_ui()
 
     def _setup_ui(self):
@@ -1127,6 +1129,7 @@ class ModelsPanel(QWidget):
     def set_placeholder(self, message: str):
         self._models_data = {}
         self._current_entry = None
+        self._current_model_name = ""
         self.models_tree.clear()
         self.description_label.setText("—")
         self.script_label.setText("Skrypt INPA: —")
@@ -1140,6 +1143,7 @@ class ModelsPanel(QWidget):
         self._inpa_path = inpa_path or ""
         self._ecu_path = ecu_path or ""
         self._current_entry = None
+        self._current_model_name = ""
 
         self.models_tree.clear()
         self.inpa_status_label.setText(
@@ -1153,51 +1157,61 @@ class ModelsPanel(QWidget):
         model_names = sorted(self._models_data.keys())
         for model_name in model_names:
             model_item = QTreeWidgetItem([model_name])
+            model_item.setData(0, Qt.ItemDataRole.UserRole, {"kind": "model", "model": model_name})
             self.models_tree.addTopLevelItem(model_item)
-            model_bucket = self._models_data.get(model_name, {})
-
-            for category in ["Silnik", "Skrzynia", "Podwozie", "Karoseria", "Komunikacja"]:
-                entries = model_bucket.get(category, [])
-                if not entries:
-                    continue
-
-                category_item = QTreeWidgetItem([category])
-                model_item.addChild(category_item)
-
-                for entry in entries:
-                    entry_item = QTreeWidgetItem([entry.get("description", "")])
-                    entry_item.setData(0, Qt.ItemDataRole.UserRole, entry)
-                    category_item.addChild(entry_item)
-
-                category_item.setExpanded(True)
-
-            model_item.setExpanded(True)
-
-        first_entry = self._find_first_leaf_item()
-        if first_entry:
-            self.models_tree.setCurrentItem(first_entry)
-
-    def _find_first_leaf_item(self) -> QTreeWidgetItem | None:
-        for i in range(self.models_tree.topLevelItemCount()):
-            model_item = self.models_tree.topLevelItem(i)
-            for j in range(model_item.childCount()):
-                category_item = model_item.child(j)
-                for k in range(category_item.childCount()):
-                    leaf = category_item.child(k)
-                    if leaf is not None:
-                        return leaf
-        return None
+            model_item.setExpanded(False)
 
     def _on_tree_item_changed(self, current, previous):
         entry = None
         if current:
-            entry = current.data(0, Qt.ItemDataRole.UserRole)
+            data = current.data(0, Qt.ItemDataRole.UserRole)
+            if isinstance(data, dict):
+                kind = data.get("kind")
+                if kind == "model":
+                    self._current_model_name = data.get("model", "")
+                    self._populate_model_children(current, self._current_model_name)
+                elif kind == "entry":
+                    entry = data
         self._current_entry = entry
         self._update_details()
 
+    def _populate_model_children(self, model_item: QTreeWidgetItem, model_name: str):
+        if model_item.childCount() > 0:
+            return
+
+        model_bucket = self._models_data.get(model_name, {})
+        for category in ["Silnik", "Skrzynia", "Podwozie", "Karoseria", "Komunikacja"]:
+            entries = model_bucket.get(category, [])
+            if not entries:
+                continue
+
+            category_item = QTreeWidgetItem([category])
+            category_item.setData(0, Qt.ItemDataRole.UserRole, {"kind": "category", "model": model_name, "category": category})
+            model_item.addChild(category_item)
+
+            for entry in entries:
+                entry_data = {
+                    "kind": "entry",
+                    "model": model_name,
+                    "category": category,
+                    "description": entry.get("description", ""),
+                    "script": entry.get("script", ""),
+                    "prg_files": list(entry.get("prg_files", []) or []),
+                }
+                entry_item = QTreeWidgetItem([entry_data["description"]])
+                entry_item.setData(0, Qt.ItemDataRole.UserRole, entry_data)
+                category_item.addChild(entry_item)
+
+            category_item.setExpanded(True)
+
+        model_item.setExpanded(True)
+
     def _update_details(self):
         if not self._current_entry:
-            self.description_label.setText("Wybierz ECU z listy po lewej.")
+            if self._current_model_name:
+                self.description_label.setText("Wybierz ECU z rozwiniętej listy po lewej.")
+            else:
+                self.description_label.setText("Najpierw wybierz model po lewej.")
             self.script_label.setText("Skrypt INPA: —")
             self.prg_list_widget.clear()
             self.prg_status_label.setText("—")
@@ -1206,7 +1220,11 @@ class ModelsPanel(QWidget):
 
         description = self._current_entry.get("description") or "—"
         script_name = self._current_entry.get("script") or ""
-        prg_files = list(self._current_entry.get("prg_file") or [])
+        prg_files = list(self._current_entry.get("prg_files") or [])
+
+        if not prg_files and self._parser and script_name:
+            prg_files = list(self._parser.get_prg_for_script(script_name) or [])
+            self._current_entry["prg_files"] = prg_files
 
         self.description_label.setText(description)
         self.script_label.setText(f"Skrypt INPA: {script_name or '—'}")
@@ -1248,6 +1266,9 @@ class ModelsPanel(QWidget):
             self.prg_list_widget.setCurrentRow(0)
         self.prg_list_widget.blockSignals(False)
         self._update_prg_selection_state(self.prg_list_widget.currentItem())
+
+    def set_parser(self, parser):
+        self._parser = parser
 
     def _on_prg_item_changed(self, current, previous):
         self._update_prg_selection_state(current)
@@ -1392,10 +1413,6 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-
-        # Pasek informacji o pliku
-        self.file_info = FileInfoPanel()
-        main_layout.addWidget(self.file_info)
 
         self.main_tabs = QTabWidget()
         main_layout.addWidget(self.main_tabs)
@@ -1585,6 +1602,7 @@ class MainWindow(QMainWindow):
             parser = parser_cls(self._inpa_path)
             self._models_data = parser.parse_all()
             self._models_loaded_for_path = self._inpa_path
+            self.models_panel.set_parser(parser)
             self.models_panel.set_models_data(self._models_data, self._inpa_path, self._ecu_path)
             if self._models_data:
                 self.status_bar.showMessage(f"Wczytano modele INPA z {self._inpa_path}")
@@ -1598,7 +1616,6 @@ class MainWindow(QMainWindow):
         if not self._prg:
             return
 
-        self.file_info.load_info(self._prg, self._filepath)
         self.job_list_panel.load_jobs(self._prg.jobs)
         self.tables_panel.load_tables(self._prg.tables)
         self.job_detail_panel.clear()
@@ -1648,10 +1665,86 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Język tłumaczeń: {self._lang.upper()}")
 
     def _show_about(self):
-        self.status_bar.showMessage(
-            "BimmerDaten v0.1 — EDIABAS PRG Viewer | "
-            "Oparty na BimmerDis (GPL-3.0)"
+        """Show About dialog with application information."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("O programie")
+        dialog.setFixedSize(500, 550)
+        dialog.setStyleSheet(WIN98_STYLE)
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+        
+        # App name (bold, large)
+        app_name_label = QLabel("BimmerDaten")
+        app_name_font = QFont("Tahoma", 16, QFont.Weight.Bold)
+        app_name_label.setFont(app_name_font)
+        layout.addWidget(app_name_label)
+        
+        # Version and author
+        version_author = QLabel("<b>Wersja:</b> v0.2<br><b>Autor:</b> Filip Dzitko")
+        layout.addWidget(version_author)
+        
+        # Description
+        description_text = (
+            "<b>Opis:</b><br>"
+            "Przeglądarka i dokumentacja plików BMW EDIABAS .prg oraz .trc. "
+            "Uzupełnienie Tool32 — tłumaczy i dokumentuje joby diagnostyczne BMW E-series."
         )
+        description_label = QLabel(description_text)
+        description_label.setWordWrap(True)
+        layout.addWidget(description_label)
+        
+        # License
+        license_text = (
+            "<b>Licencja:</b> "
+            '<a href="https://www.gnu.org/licenses/gpl-3.0.html" '
+            'style="color: #0000ff; text-decoration: underline;">GPL-3.0</a>'
+        )
+        license_label = QTextBrowser()
+        license_label.setHtml(license_text)
+        license_label.setMaximumHeight(30)
+        license_label.setOpenExternalLinks(True)
+        license_label.setStyleSheet(
+            "QTextBrowser { border: none; background-color: #d4d0c8; "
+            "margin: 0; padding: 0; }"
+        )
+        layout.addWidget(license_label)
+        
+        # Credits section
+        credits_text = (
+            "<b>Zależności i źródła:</b><br>"
+            "<ul style='margin-top: 6px; margin-bottom: 0;'>"
+            "<li>BimmerDis by radelbro (GPL-3.0)</li>"
+            "<li>ediabaslib by uholeschak (GPL-3.0)</li>"
+            "<li>deep-translator</li>"
+            "<li>PyQt6</li>"
+            "</ul>"
+        )
+        credits_label = QTextBrowser()
+        credits_label.setHtml(credits_text)
+        credits_label.setMaximumHeight(120)
+        credits_label.setStyleSheet(
+            "QTextBrowser { border: 1px inset #808080; "
+            "background-color: #ffffff; padding: 6px; }"
+        )
+        layout.addWidget(credits_label)
+        
+        # Add stretch to push button to bottom
+        layout.addStretch()
+        
+        # OK button
+        ok_button = QPushButton("OK")
+        ok_button.setMaximumWidth(80)
+        ok_button.clicked.connect(dialog.accept)
+        ok_layout = QHBoxLayout()
+        ok_layout.addStretch()
+        ok_layout.addWidget(ok_button)
+        ok_layout.addStretch()
+        layout.addLayout(ok_layout)
+        
+        dialog.setLayout(layout)
+        dialog.exec()
 
     def closeEvent(self, event):
         if self._db:

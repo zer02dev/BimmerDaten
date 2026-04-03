@@ -133,12 +133,11 @@ class INPAParser:
                 if not script_name or not description:
                     continue
 
-                prg_file = self.get_prg_for_script(script_name)
                 model_bucket.setdefault(current_category, []).append(
                     {
                         "description": description,
                         "script": script_name,
-                        "prg_file": prg_file,
+                        "prg_files": [],
                     }
                 )
 
