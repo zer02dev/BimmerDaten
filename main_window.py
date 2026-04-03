@@ -1054,6 +1054,239 @@ class TablesPanel(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Panel modeli INPA
+
+class ModelsPanel(QWidget):
+    openPrgRequested = pyqtSignal(str)
+    changeInpaPathRequested = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._models_data: dict = {}
+        self._inpa_path: str = ""
+        self._ecu_path: str = ""
+        self._current_entry: dict | None = None
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        left_box = QGroupBox("Modele INPA")
+        left_layout = QVBoxLayout(left_box)
+
+        controls_row = QHBoxLayout()
+        self.change_path_btn = QPushButton("Zmień ścieżkę INPA")
+        self.change_path_btn.clicked.connect(self.changeInpaPathRequested.emit)
+        controls_row.addWidget(self.change_path_btn)
+        controls_row.addStretch()
+        left_layout.addLayout(controls_row)
+
+        self.inpa_status_label = QLabel("Nie znaleziono instalacji INPA")
+        self.inpa_status_label.setWordWrap(True)
+        left_layout.addWidget(self.inpa_status_label)
+
+        self.models_tree = QTreeWidget()
+        self.models_tree.setHeaderHidden(True)
+        self.models_tree.currentItemChanged.connect(self._on_tree_item_changed)
+        left_layout.addWidget(self.models_tree)
+
+        right_box = QGroupBox("Szczegóły ECU")
+        right_layout = QVBoxLayout(right_box)
+
+        self.description_label = QLabel("—")
+        self.description_label.setWordWrap(True)
+        right_layout.addWidget(self.description_label)
+
+        self.script_label = QLabel("Skrypt INPA: —")
+        self.script_label.setWordWrap(True)
+        right_layout.addWidget(self.script_label)
+
+        self.prg_list_label = QLabel("Dostępne pliki PRG:")
+        right_layout.addWidget(self.prg_list_label)
+
+        self.prg_list_widget = QListWidget()
+        self.prg_list_widget.currentItemChanged.connect(self._on_prg_item_changed)
+        right_layout.addWidget(self.prg_list_widget)
+
+        self.prg_status_label = QLabel("—")
+        self.prg_status_label.setWordWrap(True)
+        right_layout.addWidget(self.prg_status_label)
+
+        self.open_prg_btn = QPushButton("Otwórz plik PRG")
+        self.open_prg_btn.setEnabled(False)
+        self.open_prg_btn.clicked.connect(self._open_selected_prg)
+        right_layout.addWidget(self.open_prg_btn)
+
+        right_layout.addStretch()
+
+        layout.addWidget(left_box, 1)
+        layout.addWidget(right_box, 1)
+
+    def set_placeholder(self, message: str):
+        self._models_data = {}
+        self._current_entry = None
+        self.models_tree.clear()
+        self.description_label.setText("—")
+        self.script_label.setText("Skrypt INPA: —")
+        self.prg_list_widget.clear()
+        self.prg_status_label.setText(message)
+        self.open_prg_btn.setEnabled(False)
+        self.inpa_status_label.setText(message)
+
+    def set_models_data(self, models_data: dict, inpa_path: str, ecu_path: str):
+        self._models_data = models_data or {}
+        self._inpa_path = inpa_path or ""
+        self._ecu_path = ecu_path or ""
+        self._current_entry = None
+
+        self.models_tree.clear()
+        self.inpa_status_label.setText(
+            f"INPA: {self._inpa_path}" if self._inpa_path else "Nie znaleziono instalacji INPA"
+        )
+
+        if not self._models_data:
+            self.set_placeholder("Nie znaleziono plików .ENG w CFGDAT")
+            return
+
+        model_names = sorted(self._models_data.keys())
+        for model_name in model_names:
+            model_item = QTreeWidgetItem([model_name])
+            self.models_tree.addTopLevelItem(model_item)
+            model_bucket = self._models_data.get(model_name, {})
+
+            for category in ["Silnik", "Skrzynia", "Podwozie", "Karoseria", "Komunikacja"]:
+                entries = model_bucket.get(category, [])
+                if not entries:
+                    continue
+
+                category_item = QTreeWidgetItem([category])
+                model_item.addChild(category_item)
+
+                for entry in entries:
+                    entry_item = QTreeWidgetItem([entry.get("description", "")])
+                    entry_item.setData(0, Qt.ItemDataRole.UserRole, entry)
+                    category_item.addChild(entry_item)
+
+                category_item.setExpanded(True)
+
+            model_item.setExpanded(True)
+
+        first_entry = self._find_first_leaf_item()
+        if first_entry:
+            self.models_tree.setCurrentItem(first_entry)
+
+    def _find_first_leaf_item(self) -> QTreeWidgetItem | None:
+        for i in range(self.models_tree.topLevelItemCount()):
+            model_item = self.models_tree.topLevelItem(i)
+            for j in range(model_item.childCount()):
+                category_item = model_item.child(j)
+                for k in range(category_item.childCount()):
+                    leaf = category_item.child(k)
+                    if leaf is not None:
+                        return leaf
+        return None
+
+    def _on_tree_item_changed(self, current, previous):
+        entry = None
+        if current:
+            entry = current.data(0, Qt.ItemDataRole.UserRole)
+        self._current_entry = entry
+        self._update_details()
+
+    def _update_details(self):
+        if not self._current_entry:
+            self.description_label.setText("Wybierz ECU z listy po lewej.")
+            self.script_label.setText("Skrypt INPA: —")
+            self.prg_list_widget.clear()
+            self.prg_status_label.setText("—")
+            self.open_prg_btn.setEnabled(False)
+            return
+
+        description = self._current_entry.get("description") or "—"
+        script_name = self._current_entry.get("script") or ""
+        prg_files = list(self._current_entry.get("prg_file") or [])
+
+        self.description_label.setText(description)
+        self.script_label.setText(f"Skrypt INPA: {script_name or '—'}")
+        self.prg_list_widget.blockSignals(True)
+        self.prg_list_widget.clear()
+
+        if not prg_files:
+            item = QListWidgetItem("Brak wykrytych plików PRG")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.prg_list_widget.addItem(item)
+            self.prg_status_label.setText("❌ Brak dopasowań")
+            self.open_prg_btn.setEnabled(False)
+            self.prg_list_widget.blockSignals(False)
+            return
+
+        first_existing_row = -1
+        for prg_file in prg_files:
+            prg_display = prg_file if prg_file.lower().endswith(".prg") else f"{prg_file}.prg"
+            exists = False
+            full_path = None
+            if self._ecu_path:
+                full_path = Path(self._ecu_path) / prg_display
+                exists = full_path.exists()
+
+            prefix = "✅" if exists else "❌"
+            item_text = f"{prefix} {prg_display}"
+            if exists:
+                item_text += f"  [{full_path}]"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.ItemDataRole.UserRole, prg_display)
+            item.setData(Qt.ItemDataRole.UserRole + 1, str(full_path) if full_path else "")
+            self.prg_list_widget.addItem(item)
+            if exists and first_existing_row == -1:
+                first_existing_row = self.prg_list_widget.count() - 1
+
+        if first_existing_row >= 0:
+            self.prg_list_widget.setCurrentRow(first_existing_row)
+        else:
+            self.prg_list_widget.setCurrentRow(0)
+        self.prg_list_widget.blockSignals(False)
+        self._update_prg_selection_state(self.prg_list_widget.currentItem())
+
+    def _on_prg_item_changed(self, current, previous):
+        self._update_prg_selection_state(current)
+
+    def _update_prg_selection_state(self, current_item):
+        if not current_item:
+            self.prg_status_label.setText("—")
+            self.open_prg_btn.setEnabled(False)
+            return
+
+        prg_display = current_item.data(Qt.ItemDataRole.UserRole) or ""
+        full_path = current_item.data(Qt.ItemDataRole.UserRole + 1) or ""
+
+        if full_path and Path(full_path).exists():
+            self.prg_status_label.setText(f"✅ Znaleziono: {full_path}")
+            self.open_prg_btn.setEnabled(True)
+        else:
+            ecu_folder = self._ecu_path or "EDIABAS\\Ecu"
+            self.prg_status_label.setText(f"❌ Nie znaleziono w {ecu_folder}")
+            self.open_prg_btn.setEnabled(False)
+
+        if not prg_display:
+            self.open_prg_btn.setEnabled(False)
+
+    def _open_selected_prg(self):
+        current_item = self.prg_list_widget.currentItem()
+        if not current_item or not self._ecu_path:
+            return
+
+        prg_display = current_item.data(Qt.ItemDataRole.UserRole) or ""
+        if not prg_display:
+            return
+
+        full_path = Path(self._ecu_path) / prg_display
+        if full_path.exists():
+            self.openPrgRequested.emit(str(full_path))
+
+
+# ---------------------------------------------------------------------------
 # Panel informacji o pliku
 
 class FileInfoPanel(QWidget):
@@ -1105,6 +1338,11 @@ class MainWindow(QMainWindow):
         self._filepath: str = ""
         self._lang: str = "de"
         self._db: Database | None = None
+        self._inpa_path: str = self._detect_inpa_path() or ""
+        self._ecu_path: str = self._detect_ecu_path() or ""
+        self._models_data: dict = {}
+        self._models_loaded_for_path: str = ""
+        self._models_parser_cls = None
 
         if DB_AVAILABLE:
             db_path = Path(__file__).resolve().parent / "data" / "database.db"
@@ -1118,6 +1356,25 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self.setStyleSheet(WIN98_STYLE)
+
+    def _detect_inpa_path(self) -> str | None:
+        for candidate in [
+            r"C:\EC-APPS\INPA",
+            r"C:\EDIABAS\INPA",
+            r"C:\Program Files\BMW\INPA",
+        ]:
+            if Path(candidate).exists():
+                return candidate
+        return None
+
+    def _detect_ecu_path(self) -> str | None:
+        for candidate in [
+            r"C:\EDIABAS\Ecu",
+            r"C:\EC-APPS\EDIABAS\Ecu",
+        ]:
+            if Path(candidate).exists():
+                return candidate
+        return None
 
     def _set_app_icon(self):
         icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
@@ -1150,7 +1407,7 @@ class MainWindow(QMainWindow):
         jobs_layout.setSpacing(0)
 
         toolbar_widget = QWidget()
-        toolbar_widget.setMaximumHeight(36)
+        toolbar_widget.setMaximumHeight(48)
         toolbar_widget.setStyleSheet(
             "background-color: #d4d0c8; border-bottom: 1px solid #808080;"
         )
@@ -1160,6 +1417,11 @@ class MainWindow(QMainWindow):
         self.open_btn = QPushButton("📂 Otwórz .PRG")
         self.open_btn.clicked.connect(self._open_file)
         toolbar_layout.addWidget(self.open_btn)
+
+        self.vehicle_info_label = QLabel("Brak wczytanego pliku")
+        self.vehicle_info_label.setWordWrap(True)
+        toolbar_layout.addWidget(self.vehicle_info_label, 1)
+
         toolbar_layout.addStretch()
 
         self.jobs_info = QLabel("Brak wczytanego pliku")
@@ -1184,6 +1446,20 @@ class MainWindow(QMainWindow):
         # Tab 2: tabele
         self.tables_panel = TablesPanel()
         self.main_tabs.addTab(self.tables_panel, "📋 Tabele")
+
+        # Tab 3: modele INPA
+        self.models_panel = ModelsPanel()
+        self.models_panel.openPrgRequested.connect(self._open_file_direct)
+        self.models_panel.changeInpaPathRequested.connect(self._choose_inpa_path)
+        self.main_tabs.addTab(self.models_panel, "🚗 Modele")
+
+        self.models_tab_index = 2
+        self.main_tabs.currentChanged.connect(self._on_main_tab_changed)
+
+        if not self._inpa_path:
+            self.models_panel.set_placeholder("Nie znaleziono instalacji INPA")
+        else:
+            self.models_panel.set_placeholder("Wybierz zakładkę Modele, aby wczytać parser INPA")
 
         # Status bar
         self.status_bar = QStatusBar()
@@ -1235,6 +1511,15 @@ class MainWindow(QMainWindow):
         if not filepath:
             return
 
+        self._open_file_direct(filepath)
+
+    def _open_file_direct(self, filepath: str):
+        if not DECODER_AVAILABLE:
+            self.status_bar.showMessage(
+                "BŁĄD: Nie można zaimportować decoderPrg.py!"
+            )
+            return
+
         self.status_bar.showMessage(f"Wczytuję: {filepath}...")
         QApplication.processEvents()
 
@@ -1242,6 +1527,7 @@ class MainWindow(QMainWindow):
             self._prg = parse_prg(filepath)
             self._filepath = filepath
             self._load_prg()
+            self.main_tabs.setCurrentIndex(0)
             self.status_bar.showMessage(
                 f"Wczytano: {Path(filepath).name} — "
                 f"{len(self._prg.jobs)} jobów, "
@@ -1249,6 +1535,64 @@ class MainWindow(QMainWindow):
             )
         except Exception as e:
             self.status_bar.showMessage(f"BŁĄD: {e}")
+
+    def _choose_inpa_path(self):
+        start_dir = self._inpa_path or r"C:\EC-APPS\INPA"
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Wybierz folder INPA",
+            start_dir,
+        )
+        if not folder:
+            return
+
+        self._inpa_path = folder
+        self._models_loaded_for_path = ""
+        self._load_models_data(force_reload=True)
+
+    def _on_main_tab_changed(self, index: int):
+        if index == self.models_tab_index:
+            self._load_models_data()
+
+    def _ensure_inpa_parser(self):
+        if self._models_parser_cls is not None:
+            return self._models_parser_cls
+
+        try:
+            from inpa_parser import INPAParser
+        except Exception as exc:
+            self.status_bar.showMessage(f"BŁĄD INPA parsera: {exc}")
+            return None
+
+        self._models_parser_cls = INPAParser
+        return self._models_parser_cls
+
+    def _load_models_data(self, force_reload: bool = False):
+        if not self._inpa_path:
+            self.models_panel.set_placeholder("Nie znaleziono instalacji INPA")
+            return
+
+        if not force_reload and self._models_loaded_for_path == self._inpa_path:
+            self.models_panel.set_models_data(self._models_data, self._inpa_path, self._ecu_path)
+            return
+
+        parser_cls = self._ensure_inpa_parser()
+        if parser_cls is None:
+            self.models_panel.set_placeholder("Nie udało się załadować parsera INPA")
+            return
+
+        try:
+            parser = parser_cls(self._inpa_path)
+            self._models_data = parser.parse_all()
+            self._models_loaded_for_path = self._inpa_path
+            self.models_panel.set_models_data(self._models_data, self._inpa_path, self._ecu_path)
+            if self._models_data:
+                self.status_bar.showMessage(f"Wczytano modele INPA z {self._inpa_path}")
+            else:
+                self.status_bar.showMessage("Nie znaleziono plików .ENG w CFGDAT")
+        except Exception as exc:
+            self.models_panel.set_placeholder(f"Błąd wczytywania INPA: {exc}")
+            self.status_bar.showMessage(f"Błąd wczytywania INPA: {exc}")
 
     def _load_prg(self):
         if not self._prg:
@@ -1258,9 +1602,28 @@ class MainWindow(QMainWindow):
         self.job_list_panel.load_jobs(self._prg.jobs)
         self.tables_panel.load_tables(self._prg.tables)
         self.job_detail_panel.clear()
+        self._update_vehicle_info_bar()
         self.jobs_info.setText(
             f"Jobów: {len(self._prg.jobs)} | Tabel: {len(self._prg.tables)}"
         )
+
+    def _update_vehicle_info_bar(self):
+        if not self._prg or not self._filepath:
+            self.vehicle_info_label.setText("Brak wczytanego pliku")
+            return
+
+        file_name = Path(self._filepath).name
+        info = self._prg.info
+        parts = [f"Plik: {file_name}"]
+        if info.bip_version:
+            parts.append(f"BIP: {info.bip_version}")
+        if info.revision:
+            parts.append(f"Rev: {info.revision}")
+        if info.author:
+            parts.append(f"Autor: {info.author}")
+        if info.last_changed:
+            parts.append(f"Data: {info.last_changed}")
+        self.vehicle_info_label.setText(" | ".join(parts))
 
     def _on_job_selected(self, current, previous):
         if not current or not self._prg:
