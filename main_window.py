@@ -486,9 +486,9 @@ class JobDetailPanel(QWidget):
         comment_header.addStretch()
         comment_layout.addLayout(comment_header)
 
-        self.job_comment_label = QLabel("Opis: —")
+        self.job_comment_label = QLabel("—")
         self.job_comment_label.setWordWrap(True)
-        self.job_comment_label.setStyleSheet("font-weight: bold;")
+        self.job_comment_label.setFont(QFont("Tahoma", 13, QFont.Weight.Bold))
         comment_layout.addWidget(self.job_comment_label)
 
         self.results_table = QTableWidget()
@@ -566,7 +566,7 @@ class JobDetailPanel(QWidget):
         comments = [c for c in job.comments if not c.startswith("JOBNAME:")]
         job_comment, result_rows = self._parse_job_comments(comments)
         self._current_comments_de = job_comment or "Brak komentarzy."
-        self.job_comment_label.setText(f"Opis: {self._current_comments_de}")
+        self.job_comment_label.setText(self._current_comments_de)
 
         self.results_table.setRowCount(len(result_rows))
         for row_index, (result_name, result_type, result_comment) in enumerate(result_rows):
@@ -608,7 +608,7 @@ class JobDetailPanel(QWidget):
 
     def _refresh_translation(self):
         if not self._current_job:
-            self.job_comment_label.setText("Opis: —")
+            self.job_comment_label.setText("—")
             self._set_translation_state("idle")
             return
 
@@ -621,17 +621,17 @@ class JobDetailPanel(QWidget):
             )
 
         if translation:
-            self.job_comment_label.setText(f"Opis: {translation}")
+            self.job_comment_label.setText(translation)
             self._set_translation_state("ok")
             return
 
         if self._lang == "de":
-            self.job_comment_label.setText(f"Opis: {self._current_comments_de}")
+            self.job_comment_label.setText(self._current_comments_de)
             self._set_translation_state("ok")
             return
 
         self.job_comment_label.setText(
-            f"Opis: ⚠️ Brak tłumaczenia ({self._lang.upper()}) — {self._current_comments_de}"
+            f"⚠️ Brak tłumaczenia ({self._lang.upper()}) — {self._current_comments_de}"
         )
         self._set_translation_state("missing")
 
