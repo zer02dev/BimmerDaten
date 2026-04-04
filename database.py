@@ -81,11 +81,17 @@ class Database:
                 module_file    TEXT NOT NULL,
                 content_before  TEXT NOT NULL,
                 content_after   TEXT NOT NULL,
+                notes          TEXT NOT NULL DEFAULT '',
                 changed_options TEXT NOT NULL,
                 exported_at    TEXT DEFAULT (datetime('now'))
             );
             """
         )
+
+        rows = self.conn.execute("PRAGMA table_info(trc_history)").fetchall()
+        columns = {row[1] for row in rows}
+        if "notes" not in columns:
+            self.conn.execute("ALTER TABLE trc_history ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
 
     def save_trc_history(
         self,
@@ -95,14 +101,15 @@ class Database:
         content_before: str,
         content_after: str,
         changed_options: list[dict],
+        notes: str = "",
     ) -> int:
         payload = json.dumps(changed_options, ensure_ascii=False)
         cursor = self.conn.execute(
             """
             INSERT INTO trc_history (
                 model, module, module_file,
-                content_before, content_after, changed_options
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                content_before, content_after, notes, changed_options
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 (model or "").upper(),
@@ -110,6 +117,7 @@ class Database:
                 module_file or "",
                 content_before or "",
                 content_after or "",
+                notes or "",
                 payload,
             ),
         )
@@ -134,7 +142,7 @@ class Database:
             rows = self.conn.execute(
                 """
                 SELECT id, model, module, module_file,
-                       content_before, content_after,
+                      content_before, content_after, notes,
                        changed_options, exported_at
                 FROM trc_history
                 WHERE model = ? AND module = ?
@@ -160,11 +168,15 @@ class Database:
                     "module_file": row["module_file"],
                     "content_before": row["content_before"],
                     "content_after": row["content_after"],
+                    "notes": row["notes"] if row["notes"] else "",
                     "changed_options": changed_options,
                     "exported_at": row["exported_at"],
                 }
             )
         return result
+
+    def get_trc_history(self, model: str, module: str, limit: int = 50) -> list[dict]:
+        return self.list_trc_history(model, module, limit=limit)
 
     def get_translation(self, prg_file: str, job_name: str, lang: str) -> Optional[str]:
         """Return translation for a job in one language: de/en/pl, else None."""

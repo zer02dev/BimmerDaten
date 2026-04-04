@@ -369,6 +369,11 @@ class ExportConfirmDialog(QDialog):
         browser.setPlainText("\n".join(lines) if lines else "Brak zmian.")
         layout.addWidget(browser)
 
+        notes_label = QLabel("Notatka (opcjonalnie):")
+        layout.addWidget(notes_label)
+        self.notes_edit = QLineEdit()
+        layout.addWidget(self.notes_edit)
+
         button_row = QHBoxLayout()
         button_row.addStretch()
         self.cancel_button = QPushButton("Anuluj")
@@ -378,6 +383,9 @@ class ExportConfirmDialog(QDialog):
         button_row.addWidget(self.cancel_button)
         button_row.addWidget(self.export_button)
         layout.addLayout(button_row)
+
+    def notes(self) -> str:
+        return self.notes_edit.text().strip()
 
 
 class HistoryCompareDialog(QDialog):
@@ -851,6 +859,7 @@ class CodingPanel(QWidget):
                     self._baseline_content,
                     content_after,
                     changes,
+                    notes=confirm.notes(),
                 )
             except Exception:
                 pass
@@ -882,9 +891,12 @@ class CodingPanel(QWidget):
         )
 
         if self._db and self._current_model and self._current_module:
-            history_rows = self._db.list_trc_history(self._current_model, self._current_module, limit=50)
+            history_rows = self._db.get_trc_history(self._current_model, self._current_module, limit=50)
             for row in history_rows:
-                label = f"{row.get('exported_at', '')} | {row.get('module', '')} | {row.get('module_file', '')}"
+                label = f"{row.get('exported_at', '')} — {row.get('module', '')}"
+                notes = (row.get("notes") or "").strip()
+                if notes:
+                    label += f" — {notes}"
                 versions.append(
                     {
                         "label": label,
