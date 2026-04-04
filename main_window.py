@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem, QFileDialog, QStatusBar, QMenuBar,
     QMenu, QGroupBox, QTextEdit, QComboBox, QFrame,
     QSizePolicy, QHeaderView, QTabWidget, QTableWidget,
-    QTableWidgetItem, QDialog, QTextBrowser
+    QTableWidgetItem, QDialog, QTextBrowser, QMessageBox
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon
@@ -32,6 +32,12 @@ try:
     DB_AVAILABLE = True
 except ImportError:
     DB_AVAILABLE = False
+
+try:
+    from trc_coding import CodingPanel
+    CODING_AVAILABLE = True
+except Exception:
+    CODING_AVAILABLE = False
 
 
 # ---------------------------------------------------------------------------
@@ -1414,8 +1420,19 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        self.top_tabs = QTabWidget()
+        self.top_tabs.tabBar().setStyleSheet(
+            "QTabBar::tab { font-size: 13px; padding: 6px 16px; }"
+        )
+        main_layout.addWidget(self.top_tabs)
+
+        diagnosis_tab = QWidget()
+        diagnosis_layout = QVBoxLayout(diagnosis_tab)
+        diagnosis_layout.setContentsMargins(0, 0, 0, 0)
+        diagnosis_layout.setSpacing(0)
+
         self.main_tabs = QTabWidget()
-        main_layout.addWidget(self.main_tabs)
+        diagnosis_layout.addWidget(self.main_tabs)
 
         # Tab 1: widok jobów
         jobs_tab = QWidget()
@@ -1472,6 +1489,17 @@ class MainWindow(QMainWindow):
 
         self.models_tab_index = 2
         self.main_tabs.currentChanged.connect(self._on_main_tab_changed)
+
+        self.top_tabs.addTab(diagnosis_tab, "🔧 Diagnoza")
+
+        if CODING_AVAILABLE:
+            self.coding_panel = CodingPanel(self._db)
+        else:
+            self.coding_panel = QWidget()
+            fallback_layout = QVBoxLayout(self.coding_panel)
+            fallback_layout.addWidget(QLabel("Nie udało się załadować panelu kodowania."))
+
+        self.top_tabs.addTab(self.coding_panel, "⚙️ Kodowanie")
 
         if not self._inpa_path:
             self.models_panel.set_placeholder("Nie znaleziono instalacji INPA")
@@ -1544,6 +1572,7 @@ class MainWindow(QMainWindow):
             self._prg = parse_prg(filepath)
             self._filepath = filepath
             self._load_prg()
+            self.top_tabs.setCurrentIndex(0)
             self.main_tabs.setCurrentIndex(0)
             self.status_bar.showMessage(
                 f"Wczytano: {Path(filepath).name} — "
@@ -1747,6 +1776,33 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def closeEvent(self, event):
+        man_path = Path(r"C:\NCSEXPER\WORK\FSW_PSW.MAN")
+        if man_path.exists() and man_path.stat().st_size > 0:
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle("Zamknąć program?")
+            dialog.setText(
+                "Plik FSW_PSW.MAN nie jest pusty.\n\n"
+                "Dobra praktyka NCS Expert wymaga wyzerowania pliku po zakończeniu pracy.\n"
+                "Czy chcesz wyczyścić FSW_PSW.MAN?"
+            )
+            clear_button = dialog.addButton("Tak — wyczyść", QMessageBox.ButtonRole.YesRole)
+            no_button = dialog.addButton("Nie", QMessageBox.ButtonRole.NoRole)
+            cancel_button = dialog.addButton("Anuluj zamykanie", QMessageBox.ButtonRole.RejectRole)
+            dialog.exec()
+
+            clicked_button = dialog.clickedButton()
+            if clicked_button == cancel_button:
+                event.ignore()
+                return
+            if clicked_button == clear_button:
+                try:
+                    with man_path.open("w", encoding="utf-8"):
+                        pass
+                except Exception as exc:
+                    QMessageBox.critical(self, "Błąd", f"Nie udało się wyczyścić pliku:\n{exc}")
+                    event.ignore()
+                    return
+
         if self._db:
             self._db.close()
         super().closeEvent(event)

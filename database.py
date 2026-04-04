@@ -5,6 +5,7 @@ SQLite storage for offline job comment translations.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -20,6 +21,7 @@ class Database:
 
     def _create_tables(self) -> None:
         self._ensure_translations_schema()
+        self._ensure_trc_history_schema()
         self.conn.commit()
 
     def _ensure_translations_schema(self) -> None:
@@ -68,6 +70,101 @@ class Database:
             """
         )
         self.conn.execute("DROP TABLE translations_old")
+
+    def _ensure_trc_history_schema(self) -> None:
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trc_history (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                model          TEXT NOT NULL,
+                module         TEXT NOT NULL,
+                module_file    TEXT NOT NULL,
+                content_before  TEXT NOT NULL,
+                content_after   TEXT NOT NULL,
+                changed_options TEXT NOT NULL,
+                exported_at    TEXT DEFAULT (datetime('now'))
+            );
+            """
+        )
+
+    def save_trc_history(
+        self,
+        model: str,
+        module: str,
+        module_file: str,
+        content_before: str,
+        content_after: str,
+        changed_options: list[dict],
+    ) -> int:
+        payload = json.dumps(changed_options, ensure_ascii=False)
+        cursor = self.conn.execute(
+            """
+            INSERT INTO trc_history (
+                model, module, module_file,
+                content_before, content_after, changed_options
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (model or "").upper(),
+                (module or "").upper(),
+                module_file or "",
+                content_before or "",
+                content_after or "",
+                payload,
+            ),
+        )
+        self.conn.execute(
+            """
+            DELETE FROM trc_history
+            WHERE model = ? AND module = ? AND id NOT IN (
+                SELECT id
+                FROM trc_history
+                WHERE model = ? AND module = ?
+                ORDER BY id DESC
+                LIMIT 10
+            )
+            """,
+            ((model or "").upper(), (module or "").upper(), (model or "").upper(), (module or "").upper()),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid or 0)
+
+    def list_trc_history(self, model: str, module: str, limit: int = 50) -> list[dict]:
+        try:
+            rows = self.conn.execute(
+                """
+                SELECT id, model, module, module_file,
+                       content_before, content_after,
+                       changed_options, exported_at
+                FROM trc_history
+                WHERE model = ? AND module = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                ((model or "").upper(), (module or "").upper(), int(limit)),
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+
+        result: list[dict] = []
+        for row in rows:
+            try:
+                changed_options = json.loads(row["changed_options"] or "[]")
+            except Exception:
+                changed_options = []
+            result.append(
+                {
+                    "id": row["id"],
+                    "model": row["model"],
+                    "module": row["module"],
+                    "module_file": row["module_file"],
+                    "content_before": row["content_before"],
+                    "content_after": row["content_after"],
+                    "changed_options": changed_options,
+                    "exported_at": row["exported_at"],
+                }
+            )
+        return result
 
     def get_translation(self, prg_file: str, job_name: str, lang: str) -> Optional[str]:
         """Return translation for a job in one language: de/en/pl, else None."""
