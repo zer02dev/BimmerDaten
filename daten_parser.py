@@ -40,20 +40,17 @@ def parse_cxx(filepath: str, fsw_dict: dict, psw_dict: dict) -> list[dict]:
     options: list[dict] = []
     pos = 0
     current_group = ""
+
+    def _looks_like_group_name(value: str) -> bool:
+        return len(value) > 2 and all(32 <= ord(char) <= 126 for char in value)
+
     while pos < len(data) - 20:
         if data[pos + 2] == 0x06 and data[pos + 3] == 0x00:
             try:
-                p = pos + 4
-                block_count = data[p]
-                p += 1
-                p += block_count * 4
-                wortadr = int.from_bytes(data[p : p + 4], "little")
-                p += 4
-                name_length = int.from_bytes(data[p : p + 2], "little")
-                p += 2
-                group_raw = data[p : p + name_length]
-                group_name = group_raw.split(b"\x00", 1)[0].decode("latin-1", errors="ignore").strip()
-                if group_name:
+                str_start = pos + 15
+                str_end = data.index(0x00, str_start)
+                group_name = data[str_start:str_end].decode("latin-1")
+                if _looks_like_group_name(group_name):
                     current_group = group_name
             except Exception:
                 pass

@@ -9,9 +9,10 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -26,6 +27,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QProgressBar,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -445,6 +447,24 @@ class ModuleDetectDialog(QDialog):
         return self._selected
 
 
+class ModuleDetectWorker(QObject):
+    finished = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, trc_options: set[str], daten_path: str, model: str):
+        super().__init__()
+        self._trc_options = set(trc_options)
+        self._daten_path = daten_path
+        self._model = model
+
+    def run(self):
+        try:
+            candidates = detect_module_from_trc(self._trc_options, self._daten_path, self._model)
+            self.finished.emit(candidates)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 class CodingPanel(QWidget):
     def __init__(self, db: Database | None = None, parent=None):
         super().__init__(parent)
@@ -467,6 +487,9 @@ class CodingPanel(QWidget):
         self._current_trc_content = ""
         self._baseline_content = ""
         self._trc_loaded = False
+        self._detect_thread: QThread | None = None
+        self._detect_worker: ModuleDetectWorker | None = None
+        self._filter_text = ""
         self._setup_ui()
         self._refresh_warning_state()
         self.reload_model_tree()
@@ -510,6 +533,13 @@ class CodingPanel(QWidget):
         self.detect_module_button.setEnabled(False)
         left_layout.addWidget(self.detect_module_button)
 
+        self.detect_progress = QProgressBar()
+        self.detect_progress.setRange(0, 0)
+        self.detect_progress.setVisible(False)
+        self.detect_progress.setTextVisible(True)
+        self.detect_progress.setFormat("Szukam modułu...")
+        left_layout.addWidget(self.detect_progress)
+
         self.load_trc_button = QPushButton("📂 Załaduj TRC")
         self.load_trc_button.clicked.connect(self.load_selected_trc)
         self.load_trc_button.setEnabled(False)
@@ -535,6 +565,28 @@ class CodingPanel(QWidget):
         table_layout = QVBoxLayout(table_widget)
         table_layout.setContentsMargins(0, 0, 0, 0)
         table_layout.setSpacing(4)
+
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(4)
+
+        self.search_icon_label = QLabel("🔍")
+        self.search_icon_label.setFixedWidth(18)
+        filter_row.addWidget(self.search_icon_label)
+
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Filtruj opcje... (nazwa lub tłumaczenie)")
+        self.search_edit.textChanged.connect(self._on_filter_text_changed)
+        filter_row.addWidget(self.search_edit, 1)
+
+        self.clear_search_button = QPushButton("✕")
+        self.clear_search_button.setFixedWidth(24)
+        self.clear_search_button.setToolTip("Wyczyść filtr")
+        self.clear_search_button.clicked.connect(self.search_edit.clear)
+        self.clear_search_button.setEnabled(False)
+        filter_row.addWidget(self.clear_search_button)
+
+        table_layout.addLayout(filter_row)
 
         self.context_label = QLabel("Wybierz model, następnie załaduj TRC")
         self.context_label.setWordWrap(True)
@@ -764,13 +816,36 @@ class CodingPanel(QWidget):
             QMessageBox.information(self, "Wykrywanie", "Najpierw załaduj FSW_PSW.TRC.")
             return
 
+        if self._detect_thread and self._detect_thread.isRunning():
+            return
+
         trc_path = Path(self._paths.trc_path)
         trc_map = parse_trc_file(str(trc_path))
         if not trc_map:
             QMessageBox.information(self, "Wykrywanie", "Nie udało się odczytać opcji z FSW_PSW.TRC.")
             return
 
-        candidates = detect_module_from_trc(set(trc_map.keys()), self._paths.daten_path, self._current_model)
+        self.detect_module_button.setEnabled(False)
+        self.load_trc_button.setEnabled(False)
+        self.detect_progress.setVisible(True)
+        self.context_label.setText("Szukam modułu...")
+        QApplication.processEvents()
+
+        self._detect_thread = QThread(self)
+        self._detect_worker = ModuleDetectWorker(set(trc_map.keys()), self._paths.daten_path, self._current_model)
+        self._detect_worker.moveToThread(self._detect_thread)
+
+        self._detect_thread.started.connect(self._detect_worker.run)
+        self._detect_worker.finished.connect(self._on_detect_finished)
+        self._detect_worker.failed.connect(self._on_detect_failed)
+        self._detect_worker.finished.connect(self._detect_thread.quit)
+        self._detect_worker.failed.connect(self._detect_thread.quit)
+        self._detect_thread.finished.connect(self._cleanup_detect_worker)
+
+        self._detect_thread.start()
+
+    def _on_detect_finished(self, candidates: list[tuple[str, float]]):
+        self._stop_detect_ui()
         if not candidates:
             QMessageBox.information(self, "Wykrywanie", "Brak kandydatów powyżej 30% dopasowania.")
             return
@@ -789,6 +864,23 @@ class CodingPanel(QWidget):
             self.module_combo.setCurrentIndex(module_index)
 
         self.context_label.setText(f"Wykryto moduł: {module_file} ({int(round(ratio * 100))}%).")
+
+    def _on_detect_failed(self, message: str):
+        self._stop_detect_ui()
+        QMessageBox.warning(self, "Wykrywanie", f"Błąd podczas wyszukiwania modułu:\n{message}")
+
+    def _stop_detect_ui(self):
+        self.detect_progress.setVisible(False)
+        self.detect_module_button.setEnabled(True)
+        self.load_trc_button.setEnabled(True)
+
+    def _cleanup_detect_worker(self):
+        if self._detect_worker:
+            self._detect_worker.deleteLater()
+            self._detect_worker = None
+        if self._detect_thread:
+            self._detect_thread.deleteLater()
+            self._detect_thread = None
 
     def load_selected_trc(self):
         if not self._current_model:
@@ -929,7 +1021,48 @@ class CodingPanel(QWidget):
             self._apply_row_style(row_index)
 
         self.trc_table.resizeColumnsToContents()
+        self._apply_table_filter()
         self._update_change_count()
+
+    def _on_filter_text_changed(self, text: str):
+        self._filter_text = (text or "").strip().casefold()
+        self.clear_search_button.setEnabled(bool(self._filter_text))
+        self._apply_table_filter()
+
+    def _apply_table_filter(self):
+        if not self._table_entries:
+            return
+
+        query = (self._filter_text or "").strip()
+        if not query:
+            for row_index in range(len(self._table_entries)):
+                self.trc_table.setRowHidden(row_index, False)
+            return
+
+        group_row_visible: dict[int, bool] = {}
+        option_row_visible: dict[int, bool] = {}
+        current_group_row: int | None = None
+
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") == "group":
+                group_row_visible[row_index] = False
+                current_group_row = row_index
+                continue
+
+            segment = self._segments[entry["segment_index"]]
+            option_name = segment.option or ""
+            option_translation = self._translator.translate(option_name)
+            is_match = query in option_name.casefold() or query in option_translation.casefold()
+            option_row_visible[row_index] = is_match
+
+            if is_match and entry.get("group") and current_group_row is not None:
+                group_row_visible[current_group_row] = True
+
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") == "group":
+                self.trc_table.setRowHidden(row_index, not group_row_visible.get(row_index, False))
+            else:
+                self.trc_table.setRowHidden(row_index, not option_row_visible.get(row_index, False))
 
     def _build_table_entries(self) -> list[dict]:
         entries: list[dict] = []
