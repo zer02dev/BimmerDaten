@@ -5,6 +5,7 @@ Panel kodowania NCS Expert oraz narzędzia do pracy z plikami TRC.
 
 from __future__ import annotations
 
+import os
 import json
 import re
 from html import escape as html_escape
@@ -604,9 +605,54 @@ class HistoryCompareDialog(QDialog):
             from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
             from reportlab.lib.units import mm
             from reportlab.pdfgen import canvas
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
             from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
         except Exception as exc:
             raise RuntimeError(f"Brak biblioteki reportlab: {exc}")
+
+        def _find_font_path(candidates: list[Path]) -> Path | None:
+            for candidate in candidates:
+                if candidate.exists():
+                    return candidate
+            return None
+
+        app_dir = Path(__file__).resolve().parent
+        font_path = _find_font_path(
+            [
+                Path(os.path.join(str(app_dir), "fonts", "DejaVuSans.ttf")),
+                Path(r"C:\Windows\Fonts\arial.ttf"),
+                Path(r"C:\Windows\Fonts\calibri.ttf"),
+            ]
+        )
+        bold_font_path = _find_font_path(
+            [
+                Path(os.path.join(str(app_dir), "fonts", "DejaVuSans-Bold.ttf")),
+                Path(r"C:\Windows\Fonts\arialbd.ttf"),
+                Path(r"C:\Windows\Fonts\calibrib.ttf"),
+            ]
+        )
+
+        base_font_name = "Helvetica"
+        bold_font_name = "Helvetica-Bold"
+        if font_path is not None:
+            base_font_name = "CustomFont"
+            pdfmetrics.registerFont(TTFont(base_font_name, str(font_path)))
+            if bold_font_path is not None:
+                bold_font_name = "CustomFont-Bold"
+                pdfmetrics.registerFont(TTFont(bold_font_name, str(bold_font_path)))
+                try:
+                    pdfmetrics.registerFontFamily(
+                        base_font_name,
+                        normalFont=base_font_name,
+                        boldFont=bold_font_name,
+                        italicFont=base_font_name,
+                        boldItalicFont=bold_font_name,
+                    )
+                except Exception:
+                    pass
+            else:
+                bold_font_name = base_font_name
 
         class NumberedCanvas(canvas.Canvas):
             def __init__(self, *args, **kwargs):
@@ -621,7 +667,7 @@ class HistoryCompareDialog(QDialog):
                 total_pages = len(self._saved_page_states)
                 for state in self._saved_page_states:
                     self.__dict__.update(state)
-                    self.setFont("Helvetica", 8)
+                    self.setFont(base_font_name, 8)
                     self.setFillColor(colors.HexColor("#4A4A4A"))
                     self.drawString(15 * mm, 8 * mm, "Wygenerowano przez BimmerDaten v0.2 - GPL-3.0")
                     self.drawRightString(195 * mm, 8 * mm, f"Strona {self._pageNumber} / {total_pages}")
@@ -631,16 +677,17 @@ class HistoryCompareDialog(QDialog):
         doc = SimpleDocTemplate(
             str(pdf_path),
             pagesize=A4,
-            leftMargin=12 * mm,
-            rightMargin=12 * mm,
+            leftMargin=40,
+            rightMargin=40,
             topMargin=12 * mm,
             bottomMargin=16 * mm,
         )
+        page_width = A4[0] - 80
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             "PdfTitle",
             parent=styles["Heading2"],
-            fontName="Helvetica-Bold",
+            fontName=bold_font_name,
             fontSize=12,
             textColor=colors.HexColor("#000000"),
             spaceAfter=0,
@@ -648,7 +695,7 @@ class HistoryCompareDialog(QDialog):
         normal_style = ParagraphStyle(
             "PdfNormal",
             parent=styles["Normal"],
-            fontName="Helvetica",
+            fontName=base_font_name,
             fontSize=9,
             leading=11,
         )
@@ -660,9 +707,34 @@ class HistoryCompareDialog(QDialog):
         changed_style = ParagraphStyle(
             "ChangedCell",
             parent=normal_style,
-            fontName="Helvetica-Bold",
+            fontName=bold_font_name,
             textColor=colors.HexColor("#00008B"),
+            fontSize=8,
+            leading=10,
+            wordWrap="CJK",
         )
+        header_cell_style = ParagraphStyle(
+            "HeaderCell",
+            parent=normal_style,
+            fontName=bold_font_name,
+            fontSize=8,
+            leading=10,
+            textColor=colors.white,
+            alignment=1,
+            wordWrap="CJK",
+        )
+        cell_style = ParagraphStyle(
+            "Cell",
+            parent=normal_style,
+            fontName=base_font_name,
+            fontSize=8,
+            leading=10,
+            wordWrap="CJK",
+        )
+
+        def make_cell(value: str, style: ParagraphStyle = cell_style) -> Paragraph:
+            text = html_escape(str(value or "")).replace("\n", "<br/>")
+            return Paragraph(text, style)
 
         module_name = str(row.get("module") or "")
         module_file = str(row.get("module_file") or "")
@@ -678,7 +750,6 @@ class HistoryCompareDialog(QDialog):
             ["Moduł:", module_display],
             ["Nr części:", str(row.get("teilenummer") or "")],
             ["Data prod.:", str(row.get("production_date_display") or row.get("production_date") or "")],
-            ["Kodowano:", str(row.get("codierdatum") or "")],
             ["Data eksportu:", str(row.get("exported_at") or "")],
             ["Notatka:", str(row.get("notes") or "")],
         ]
@@ -704,8 +775,8 @@ class HistoryCompareDialog(QDialog):
         story.append(header)
         story.append(Spacer(1, 6))
 
-        meta_data = [[Paragraph(f"<b>{html_escape(label)}</b>", normal_style), Paragraph(html_escape(value), normal_style)] for label, value in metadata_rows]
-        meta_table = Table(meta_data, colWidths=[doc.width * 0.25, doc.width * 0.75])
+        meta_data = [[make_cell(label), make_cell(value)] for label, value in metadata_rows]
+        meta_table = Table(meta_data, colWidths=[page_width * 0.25, page_width * 0.75])
         meta_table.setStyle(
             TableStyle(
                 [
@@ -726,14 +797,25 @@ class HistoryCompareDialog(QDialog):
             story.append(Spacer(1, 14))
             story.append(Paragraph("Brak zmian", centered_style))
         else:
+            raw_col_widths = [
+                page_width * 0.04,
+                page_width * 0.18,
+                page_width * 0.18,
+                page_width * 0.12,
+                page_width * 0.12,
+                page_width * 0.12,
+                page_width * 0.12,
+            ]
+            raw_col_widths[-1] = page_width - sum(raw_col_widths[:-1])
+
             header_row = [
-                "Nr",
-                "Funkcja (DE)",
-                "Funkcja (EN)",
-                "Było (DE)",
-                "Było (EN)",
-                "Jest (DE)",
-                "Jest (EN)",
+                make_cell("Nr", header_cell_style),
+                make_cell("Funkcja (DE)", header_cell_style),
+                make_cell("Funkcja (EN)", header_cell_style),
+                make_cell("Było (DE)", header_cell_style),
+                make_cell("Było (EN)", header_cell_style),
+                make_cell("Jest (DE)", header_cell_style),
+                make_cell("Jest (EN)", header_cell_style),
             ]
             table_rows = [header_row]
             for index, change in enumerate(changes, start=1):
@@ -745,25 +827,25 @@ class HistoryCompareDialog(QDialog):
                 after_en = self._tr(after_de)
                 table_rows.append(
                     [
-                        str(index),
-                        option_de,
-                        option_en,
-                        before_de,
-                        before_en,
-                        Paragraph(html_escape(after_de), changed_style),
-                        Paragraph(html_escape(after_en), changed_style),
+                        make_cell(str(index)),
+                        make_cell(option_de),
+                        make_cell(option_en),
+                        make_cell(before_de),
+                        make_cell(before_en),
+                        make_cell(after_de, changed_style),
+                        make_cell(after_en, changed_style),
                     ]
                 )
 
             changes_table = Table(
                 table_rows,
-                colWidths=[doc.width * 0.05, doc.width * 0.18, doc.width * 0.20, doc.width * 0.14, doc.width * 0.14, doc.width * 0.14, doc.width * 0.15],
+                colWidths=raw_col_widths,
                 repeatRows=1,
             )
             table_style_commands = [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4A4A4A")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#A0A0A0")),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -771,11 +853,12 @@ class HistoryCompareDialog(QDialog):
                 ("RIGHTPADDING", (0, 0), (-1, -1), 3),
                 ("TOPPADDING", (0, 0), (-1, -1), 2),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("WORDWRAP", (0, 0), (-1, -1), True),
             ]
             for row_index in range(1, len(table_rows)):
                 bg_color = colors.white if row_index % 2 else colors.HexColor("#F5F5F5")
                 table_style_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), bg_color))
-                table_style_commands.append(("FONTNAME", (5, row_index), (6, row_index), "Helvetica-Bold"))
+                table_style_commands.append(("FONTNAME", (5, row_index), (6, row_index), bold_font_name))
                 table_style_commands.append(("TEXTCOLOR", (5, row_index), (6, row_index), colors.HexColor("#00008B")))
 
             changes_table.setStyle(TableStyle(table_style_commands))
