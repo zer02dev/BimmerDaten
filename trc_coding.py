@@ -1693,21 +1693,28 @@ class CodingPanel(QWidget):
         for profile in profiles:
             profile_name = str(profile.get("profile_name") or "").strip() or "BRAK"
             can_write = bool(profile.get("can_write"))
+            can_read = bool(profile.get("can_read"))
             color = "#1F8A1F" if can_write else "#C00000"
-            chip = QLabel(profile_name)
+            chip = QPushButton(profile_name)
             chip.setStyleSheet(
-                "QLabel {"
+                "QPushButton {"
                 f"background-color: {color};"
                 "color: #FFFFFF;"
                 "border: 1px solid #808080;"
                 "border-radius: 3px;"
                 "padding: 1px 8px;"
                 "font-weight: bold;"
-                "background-clip: padding;"
+                "text-align: center;"
+                "}"
+                "QPushButton:hover {"
+                f"background-color: {'#228B22' if can_write else '#A00000'};"
                 "}"
             )
-            chip.setWordWrap(False)
-            chip.setToolTip(str(profile.get("profile_path") or ""))
+            chip.setFlat(False)
+            chip.setCursor(Qt.CursorShape.PointingHandCursor)
+            chip.setToolTip(f"{profile.get('profile_path', '')}\nKliknij, aby wyświetlić szczegóły")
+            chip.setFixedHeight(chip.sizeHint().height())
+            chip.clicked.connect(lambda checked, p=profile: self._show_profile_info(p))
             chip_widgets.append(chip)
             self.profile_status_label_layout.addWidget(chip)
 
@@ -1724,6 +1731,34 @@ class CodingPanel(QWidget):
         self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
         tallest_chip = max(chip.sizeHint().height() for chip in chip_widgets)
         self.profile_status_frame.setFixedHeight(tallest_chip + 10)
+
+    def _show_profile_info(self, profile: dict):
+        profile_name = str(profile.get("profile_name") or "").strip() or "BRAK"
+        profile_path = str(profile.get("profile_path") or "")
+        can_read = bool(profile.get("can_read"))
+        can_write = bool(profile.get("can_write"))
+        
+        if can_write:
+            status = "✅ Pełny dostęp (odczyt + zapis)"
+            color = "#228B22"
+        elif can_read:
+            status = "🔒 Tylko odczyt"
+            color = "#FFD700"
+        else:
+            status = "❌ Brak wymaganych uprawnień"
+            color = "#FF8C00"
+        
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Informacje o profilu NCS Expert")
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setText(
+            f"Profil: <b>{html_escape(profile_name)}</b>\n\n"
+            f"Ścieżka:\n{html_escape(profile_path)}\n\n"
+            f"Status: {status}"
+        )
+        dialog.setStyleSheet(f"QMessageBox {{ background-color: #FFFFFF; }}")
+        ok_button = dialog.addButton("OK", QMessageBox.ButtonRole.AcceptRole)
+        dialog.exec()
 
     def _refresh_ncs_profile_status(self, initial: bool = False):
         profile_path = self._load_saved_profile_path()
