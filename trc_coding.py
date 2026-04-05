@@ -6,7 +6,6 @@ Panel kodowania NCS Expert oraz narzędzia do pracy z plikami TRC.
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,20 +22,21 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QTextBrowser,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
     QHeaderView,
 )
 
 from database import Database
+from daten_parser import detect_module_from_trc, load_module, parse_trc as parse_trc_file
 from trc_translator import TrcTranslator
 
 
@@ -61,15 +61,6 @@ class CodingPaths:
     trc_path: str = str(DEFAULT_TRC_PATH)
     daten_path: str = str(DEFAULT_DATEN_PATH)
     translations_path: str = str(DEFAULT_TRANSLATIONS_PATH)
-
-
-@dataclass
-class ParsedModuleFile:
-    model: str
-    module: str
-    module_file: str
-    source_path: Path
-    modules: list[dict] = field(default_factory=list)
 
 
 def read_text_file(path: Path) -> str:
@@ -197,83 +188,6 @@ def _candidate_path(default_path: Path, config_value: str | None) -> Path:
             return candidate
         return candidate
     return default_path
-
-
-def discover_model_files(daten_path: Path) -> dict[str, ParsedModuleFile]:
-    result: dict[str, ParsedModuleFile] = {}
-    if not daten_path.exists():
-        return result
-
-    search_patterns = ["*SGFAM.DAT", "*SGFAM.dat"]
-    dat_files: list[Path] = []
-    for pattern in search_patterns:
-        dat_files.extend(daten_path.rglob(pattern))
-
-    seen_paths: set[Path] = set()
-    for dat_path in sorted(dat_files):
-        if dat_path in seen_paths:
-            continue
-        seen_paths.add(dat_path)
-        model_name = _derive_model_name(dat_path)
-        modules = _parse_module_entries(dat_path)
-        result[model_name] = ParsedModuleFile(
-            model=model_name,
-            module="",
-            module_file=dat_path.name,
-            source_path=dat_path,
-            modules=modules,
-        )
-    return result
-
-
-def _derive_model_name(dat_path: Path) -> str:
-    parent_name = dat_path.parent.name.strip().upper()
-    if parent_name and len(parent_name) <= 8:
-        return parent_name
-
-    stem = dat_path.stem.upper()
-    if "SGFAM" in stem:
-        return stem.split("SGFAM", 1)[0].strip(" _-.") or stem
-    return stem
-
-
-def _parse_module_entries(dat_path: Path) -> list[dict]:
-    text = read_text_file(dat_path)
-    modules: list[dict] = []
-    seen_files: set[str] = set()
-    file_pattern = re.compile(r"([A-Za-z0-9_]+)\.([A-Za-z0-9]{2,4})")
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        for match in file_pattern.finditer(line):
-            stem = match.group(1).upper()
-            extension = match.group(2).upper()
-            module_file = f"{stem}.{extension}"
-            if module_file in seen_files:
-                continue
-            seen_files.add(module_file)
-
-            prefix = line[: match.start()].strip(" \t-_:;,.()[]{}")
-            if prefix:
-                module_name = prefix.split(",")[-1].split(";")[-1].split("|")[-1].strip().upper()
-            else:
-                module_name = stem
-
-            if not module_name:
-                module_name = stem
-
-            modules.append(
-                {
-                    "module": module_name,
-                    "module_file": module_file,
-                    "label": f"{module_name} ({module_file})",
-                }
-            )
-
-    modules.sort(key=lambda entry: (entry["module"], entry["module_file"]))
-    return modules
 
 
 class PathConfigDialog(QDialog):
@@ -473,6 +387,51 @@ class HistoryCompareDialog(QDialog):
         self.diff_table.resizeColumnsToContents()
 
 
+class ModuleDetectDialog(QDialog):
+    def __init__(self, candidates: list[tuple[str, float]], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Wykryte moduły")
+        self.setModal(True)
+        self._selected: tuple[str, float] | None = None
+        self._build_ui(candidates[:3])
+
+    def _build_ui(self, candidates: list[tuple[str, float]]):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        layout.addWidget(QLabel("Wybierz wykryty moduł:"))
+        self.list_widget = QListWidget()
+        for module_name, ratio in candidates:
+            item = QListWidgetItem(f"{module_name} — {int(round(ratio * 100))}%")
+            item.setData(Qt.ItemDataRole.UserRole, (module_name, ratio))
+            self.list_widget.addItem(item)
+
+        if self.list_widget.count() > 0:
+            self.list_widget.setCurrentRow(0)
+        self.list_widget.itemDoubleClicked.connect(lambda _: self._accept_selection())
+        layout.addWidget(self.list_widget, 1)
+
+        buttons = QDialogButtonBox()
+        select_button = QPushButton("Wybierz")
+        cancel_button = QPushButton("Anuluj")
+        select_button.clicked.connect(self._accept_selection)
+        cancel_button.clicked.connect(self.reject)
+        buttons.addButton(select_button, QDialogButtonBox.ButtonRole.AcceptRole)
+        buttons.addButton(cancel_button, QDialogButtonBox.ButtonRole.RejectRole)
+        layout.addWidget(buttons)
+
+    def _accept_selection(self):
+        item = self.list_widget.currentItem()
+        if not item:
+            return
+        self._selected = item.data(Qt.ItemDataRole.UserRole)
+        self.accept()
+
+    def selected(self) -> tuple[str, float] | None:
+        return self._selected
+
+
 class CodingPanel(QWidget):
     def __init__(self, db: Database | None = None, parent=None):
         super().__init__(parent)
@@ -481,15 +440,19 @@ class CodingPanel(QWidget):
         self._translator = TrcTranslator(self._paths.translations_path)
         self._segments: list[TrcSegment] = []
         self._option_rows: list[int] = []
+        self._row_editable: dict[int, bool] = {}
+        self._module_options: set[str] = set()
+        self._module_options_cache: dict[tuple[str, str], set[str]] = {}
+        self._available_models: list[str] = []
+        self._modules_by_model: dict[str, list[str]] = {}
         self._current_model = ""
         self._current_module = ""
         self._current_module_file = ""
         self._current_trc_content = ""
         self._baseline_content = ""
-        self._model_files: dict[str, ParsedModuleFile] = {}
         self._setup_ui()
         self._refresh_warning_state()
-        self.reload_model_tree(select_first=True)
+        self.reload_model_tree()
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -515,10 +478,24 @@ class CodingPanel(QWidget):
         self.change_path_button.clicked.connect(self._open_path_config_dialog)
         left_layout.addWidget(self.change_path_button)
 
-        self.model_tree = QTreeWidget()
-        self.model_tree.setHeaderHidden(True)
-        self.model_tree.currentItemChanged.connect(self._on_tree_selection_changed)
-        left_layout.addWidget(self.model_tree, 1)
+        left_layout.addWidget(QLabel("Model:"))
+        self.model_combo = QComboBox()
+        self.model_combo.currentIndexChanged.connect(self._on_model_changed)
+        left_layout.addWidget(self.model_combo)
+
+        left_layout.addWidget(QLabel("Moduł:"))
+        self.module_combo = QComboBox()
+        self.module_combo.currentIndexChanged.connect(self._on_module_changed)
+        left_layout.addWidget(self.module_combo)
+
+        self.detect_module_button = QPushButton("🔍 Wykryj moduł z TRC")
+        self.detect_module_button.clicked.connect(self.detect_module_from_current_trc)
+        left_layout.addWidget(self.detect_module_button)
+
+        self.load_trc_button = QPushButton("📂 Załaduj TRC")
+        self.load_trc_button.clicked.connect(self.load_selected_trc)
+        left_layout.addWidget(self.load_trc_button)
+        left_layout.addStretch(1)
 
         self.refresh_button = QPushButton("🔄 Odśwież")
         self.refresh_button.clicked.connect(self.reload_current_trc)
@@ -540,13 +517,14 @@ class CodingPanel(QWidget):
         table_layout.setContentsMargins(0, 0, 0, 0)
         table_layout.setSpacing(4)
 
-        self.context_label = QLabel("Wybierz model i moduł po lewej")
+        self.context_label = QLabel("Wybierz model i moduł")
         self.context_label.setWordWrap(True)
         table_layout.addWidget(self.context_label)
 
         self.trc_table = QTableWidget()
-        self.trc_table.setColumnCount(5)
+        self.trc_table.setColumnCount(6)
         self.trc_table.setHorizontalHeaderLabels([
+            "Nr",
             "Opcja",
             "Tłumaczenie",
             "Wartość",
@@ -627,81 +605,140 @@ class CodingPanel(QWidget):
         self.reload_model_tree(select_first=True)
         self.reload_current_trc()
 
-    def reload_model_tree(self, select_first: bool = False):
-        self.model_tree.blockSignals(True)
-        self.model_tree.clear()
-        self._model_files = discover_model_files(Path(self._paths.daten_path))
+    def reload_model_tree(self, select_first: bool = True):
+        self.model_combo.blockSignals(True)
+        self.module_combo.blockSignals(True)
+        self.model_combo.clear()
+        self.module_combo.clear()
+        self._available_models = []
+        self._modules_by_model.clear()
+        self._current_model = ""
+        self._current_module = ""
+        self._current_module_file = ""
 
-        for model_name in sorted(self._model_files.keys()):
-            model_data = self._model_files[model_name]
-            model_item = QTreeWidgetItem([model_name])
-            model_item.setData(0, Qt.ItemDataRole.UserRole, {"kind": "model", "model": model_name})
-            self.model_tree.addTopLevelItem(model_item)
-
-            for module in model_data.modules:
-                module_label = module.get("label", "")
-                module_item = QTreeWidgetItem([module_label])
-                module_item.setData(
-                    0,
-                    Qt.ItemDataRole.UserRole,
-                    {
-                        "kind": "module",
-                        "model": model_name,
-                        "module": module.get("module", ""),
-                        "module_file": module.get("module_file", ""),
-                    },
+        daten_path = Path(self._paths.daten_path)
+        if daten_path.exists():
+            for folder in sorted([item for item in daten_path.iterdir() if item.is_dir()], key=lambda p: p.name.upper()):
+                modules = sorted(
+                    [
+                        entry.name
+                        for entry in folder.iterdir()
+                        if entry.is_file()
+                        and len(entry.suffix) == 4
+                        and entry.suffix[1:2].upper() == "C"
+                        and entry.suffix[2:].isdigit()
+                    ],
+                    key=str.upper,
                 )
-                model_item.addChild(module_item)
+                if not modules:
+                    continue
+                model_name = folder.name.upper()
+                self._available_models.append(model_name)
+                self._modules_by_model[model_name] = modules
+                self.model_combo.addItem(model_name)
 
-            model_item.setExpanded(True)
+        self.model_combo.blockSignals(False)
+        self.module_combo.blockSignals(False)
 
-        self.model_tree.blockSignals(False)
+        if not self._available_models:
+            self.context_label.setText("Nie znaleziono folderów chassis z plikami .Cxx w DATEN")
+            self._module_options = set()
+            self._render_table()
+            return
+
         if select_first:
-            self._select_first_module()
-
-        if not self._model_files:
-            self.context_label.setText("Nie znaleziono plików E46SGFAM.DAT w DATEN")
+            self.model_combo.setCurrentIndex(0)
         else:
-            self.context_label.setText("Wybierz model i moduł po lewej")
+            self.context_label.setText("Wybierz model i moduł")
 
-    def _select_first_module(self):
-        if self.model_tree.topLevelItemCount() == 0:
+    def _on_model_changed(self, index: int):
+        if index < 0:
+            return
+        model_name = self.model_combo.currentText().strip().upper()
+        self._current_model = model_name
+        self.module_combo.blockSignals(True)
+        self.module_combo.clear()
+        for module_file in self._modules_by_model.get(model_name, []):
+            self.module_combo.addItem(module_file)
+        self.module_combo.blockSignals(False)
+
+        if self.module_combo.count() > 0:
+            self.module_combo.setCurrentIndex(0)
+            self._on_module_changed(0)
+        else:
+            self._current_module = ""
+            self._current_module_file = ""
+            self._module_options = set()
+            self.context_label.setText(f"Model: {model_name} | Brak plików .Cxx")
+            self._render_table()
+
+    def _on_module_changed(self, index: int):
+        if index < 0:
+            return
+        module_file = self.module_combo.currentText().strip()
+        self._current_module_file = module_file
+        self._current_module = module_file.split(".", 1)[0].upper() if module_file else ""
+
+        cache_key = (self._current_model, module_file.upper())
+        if cache_key in self._module_options_cache:
+            self._module_options = self._module_options_cache[cache_key]
+        else:
+            parsed_options = load_module(self._paths.daten_path, self._current_model, module_file)
+            option_names = {
+                str(item.get("name", "")).strip().upper()
+                for item in parsed_options
+                if str(item.get("name", "")).strip()
+            }
+            self._module_options_cache[cache_key] = option_names
+            self._module_options = option_names
+
+        self.context_label.setText(f"Model: {self._current_model} | Moduł: {self._current_module_file}")
+        if self._segments:
+            self._render_table()
+
+    def detect_module_from_current_trc(self):
+        if not self._current_model:
+            QMessageBox.information(self, "Wykrywanie", "Najpierw wybierz model.")
             return
 
-        for top_index in range(self.model_tree.topLevelItemCount()):
-            model_item = self.model_tree.topLevelItem(top_index)
-            if model_item.childCount() == 0:
-                continue
-            first_module = model_item.child(0)
-            if first_module:
-                self.model_tree.setCurrentItem(first_module)
-                return
-
-    def _on_tree_selection_changed(self, current, previous):
-        if not current:
+        trc_path = Path(self._paths.trc_path)
+        trc_map = parse_trc_file(str(trc_path))
+        if not trc_map:
+            QMessageBox.information(self, "Wykrywanie", "Nie udało się odczytać opcji z FSW_PSW.TRC.")
             return
 
-        data = current.data(0, Qt.ItemDataRole.UserRole) or {}
-        kind = data.get("kind")
-        if kind == "model":
-            self.context_label.setText(f"Model: {data.get('model', '')}")
+        candidates = detect_module_from_trc(set(trc_map.keys()), self._paths.daten_path, self._current_model)
+        if not candidates:
+            QMessageBox.information(self, "Wykrywanie", "Brak kandydatów powyżej 30% dopasowania.")
             return
 
-        if kind != "module":
+        dialog = ModuleDetectDialog(candidates, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
-        self._current_model = data.get("model", "")
-        self._current_module = data.get("module", "")
-        self._current_module_file = data.get("module_file", "")
+        selected = dialog.selected()
+        if not selected:
+            return
+
+        module_file, ratio = selected
+        module_index = self.module_combo.findText(module_file)
+        if module_index >= 0:
+            self.module_combo.setCurrentIndex(module_index)
+
         self.context_label.setText(
-            f"Model: {self._current_model} | Moduł: {self._current_module} | Plik: {self._current_module_file}"
+            f"Wykryto moduł: {module_file} ({int(round(ratio * 100))}%). Możesz załadować TRC."
         )
+
+    def load_selected_trc(self):
+        if not self._current_module_file:
+            QMessageBox.information(self, "TRC", "Najpierw wybierz moduł.")
+            return
         self.load_trc_from_path(Path(self._paths.trc_path))
 
     def reload_current_trc(self):
         self._refresh_warning_state()
-        if not self._current_module:
-            self.context_label.setText("Wybierz moduł po lewej, aby wczytać FSW_PSW.TRC")
+        if not self._current_module_file:
+            self.context_label.setText("Wybierz model i moduł, aby wczytać FSW_PSW.TRC")
             return
         self.load_trc_from_path(Path(self._paths.trc_path))
 
@@ -709,6 +746,7 @@ class CodingPanel(QWidget):
         if not trc_path.exists():
             self._segments = []
             self._option_rows = []
+            self._row_editable = {}
             self._current_trc_content = ""
             self._baseline_content = ""
             self._render_table()
@@ -720,10 +758,20 @@ class CodingPanel(QWidget):
         self._baseline_content = content
         self._segments = parse_trc_content(content)
         self._option_rows = [index for index, segment in enumerate(self._segments) if segment.kind == "option"]
+        self._row_editable = {}
+
+        matched = 0
+        total = len(self._option_rows)
+        for row_index, segment_index in enumerate(self._option_rows):
+            option_name = self._segments[segment_index].option.strip().upper()
+            editable = option_name in self._module_options
+            self._row_editable[row_index] = editable
+            if editable:
+                matched += 1
+
+        percentage = int(round((matched / total) * 100)) if total else 0
         self._render_table()
-        self.context_label.setText(
-            f"Model: {self._current_model} | Moduł: {self._current_module} | TRC: {trc_path}"
-        )
+        self.context_label.setText(f"Załadowano: {self._current_module_file} — {matched}/{total} opcji dopasowanych ({percentage}%)")
 
     def _render_table(self):
         self.trc_table.setRowCount(len(self._option_rows))
@@ -731,6 +779,10 @@ class CodingPanel(QWidget):
 
         for row_index, segment_index in enumerate(self._option_rows):
             segment = self._segments[segment_index]
+            editable = self._row_editable.get(row_index, True)
+
+            number_item = QTableWidgetItem(str(row_index + 1))
+            number_item.setFlags(number_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
             option_item = QTableWidgetItem(segment.option)
             option_item.setFlags(option_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -740,6 +792,7 @@ class CodingPanel(QWidget):
             value_edit = QLineEdit(segment.value)
             value_edit.textChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text))
             value_edit.setMinimumWidth(180)
+            value_edit.setReadOnly(not editable)
 
             value_translation_item = QTableWidgetItem(self._translator.translate(segment.value))
             value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -747,11 +800,12 @@ class CodingPanel(QWidget):
             changed_item = QTableWidgetItem("Nie")
             changed_item.setFlags(changed_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-            self.trc_table.setItem(row_index, 0, option_item)
-            self.trc_table.setItem(row_index, 1, translation_item)
-            self.trc_table.setCellWidget(row_index, 2, value_edit)
-            self.trc_table.setItem(row_index, 3, value_translation_item)
-            self.trc_table.setItem(row_index, 4, changed_item)
+            self.trc_table.setItem(row_index, 0, number_item)
+            self.trc_table.setItem(row_index, 1, option_item)
+            self.trc_table.setItem(row_index, 2, translation_item)
+            self.trc_table.setCellWidget(row_index, 3, value_edit)
+            self.trc_table.setItem(row_index, 4, value_translation_item)
+            self.trc_table.setItem(row_index, 5, changed_item)
             self._apply_row_style(row_index)
 
         self.trc_table.resizeColumnsToContents()
@@ -760,12 +814,14 @@ class CodingPanel(QWidget):
     def _on_value_changed(self, row_index: int, text: str):
         if row_index < 0 or row_index >= len(self._option_rows):
             return
+        if not self._row_editable.get(row_index, True):
+            return
 
         segment_index = self._option_rows[row_index]
         segment = self._segments[segment_index]
         segment.value = text
 
-        value_item = self.trc_table.item(row_index, 3)
+        value_item = self.trc_table.item(row_index, 4)
         if value_item:
             value_item.setText(self._translator.translate(text))
 
@@ -779,27 +835,33 @@ class CodingPanel(QWidget):
         segment_index = self._option_rows[row_index]
         segment = self._segments[segment_index]
         changed = segment.value != segment.original_value
+        editable = self._row_editable.get(row_index, True)
 
         for column in range(self.trc_table.columnCount()):
             item = self.trc_table.item(row_index, column)
             if item:
-                if changed:
+                if not editable:
+                    item.setBackground(QColor("#E0E0E0"))
+                    item.setForeground(QColor("#606060"))
+                elif changed:
                     item.setBackground(QColor("#FFFF99"))
                     item.setForeground(QColor("#000000"))
                 else:
                     item.setBackground(QColor("#FFFFFF"))
                     item.setForeground(QColor("#000000"))
 
-        value_widget = self.trc_table.cellWidget(row_index, 2)
+        value_widget = self.trc_table.cellWidget(row_index, 3)
         if isinstance(value_widget, QLineEdit):
-            if changed:
+            if not editable:
+                value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
+            elif changed:
                 value_widget.setStyleSheet("background-color: #FFFF99; color: #000000;")
             else:
                 value_widget.setStyleSheet("")
 
-        status_item = self.trc_table.item(row_index, 4)
+        status_item = self.trc_table.item(row_index, 5)
         if status_item:
-            status_item.setText("Tak" if changed else "Nie")
+            status_item.setText("Tak" if changed and editable else "Nie")
 
     def _update_change_count(self):
         changed_count = 0
@@ -893,10 +955,7 @@ class CodingPanel(QWidget):
         if self._db and self._current_model and self._current_module:
             history_rows = self._db.get_trc_history(self._current_model, self._current_module, limit=50)
             for row in history_rows:
-                label = f"{row.get('exported_at', '')} — {row.get('module', '')}"
-                notes = (row.get("notes") or "").strip()
-                if notes:
-                    label += f" — {notes}"
+                label = self._format_history_label(row)
                 versions.append(
                     {
                         "label": label,
@@ -906,3 +965,23 @@ class CodingPanel(QWidget):
                 )
 
         return versions
+
+    def _format_history_label(self, row: dict) -> str:
+        exported_at = (row.get("exported_at") or "").strip()
+        module = (row.get("module") or "").strip()
+        notes = (row.get("notes") or "").strip()
+        if exported_at:
+            try:
+                from datetime import datetime
+
+                parsed = datetime.strptime(exported_at, "%Y-%m-%d %H:%M:%S")
+                exported_at = parsed.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                pass
+
+        label = exported_at or "Brak daty"
+        if module:
+            label = f"{label} — {module}"
+        if notes:
+            label = f"{label} — {notes}"
+        return label
