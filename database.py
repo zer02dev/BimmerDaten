@@ -330,6 +330,34 @@ class Database:
         value = row[column]
         return value if value else None
 
+    def save_translation(
+        self,
+        prg_file: str,
+        job_name: str,
+        comment_de: str | None = None,
+        comment_en: str | None = None,
+        comment_pl: str | None = None,
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO translations (prg_file, job_name, comment_de, comment_en, comment_pl)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(prg_file, job_name) DO UPDATE SET
+                comment_de = COALESCE(excluded.comment_de, comment_de),
+                comment_en = COALESCE(excluded.comment_en, comment_en),
+                comment_pl = COALESCE(excluded.comment_pl, comment_pl),
+                updated_at = datetime('now')
+            """,
+            (
+                (prg_file or "").upper(),
+                job_name or "",
+                comment_de,
+                comment_en,
+                comment_pl,
+            ),
+        )
+        self.conn.commit()
+
     def get_all_translations(self, prg_file: str, job_name: str) -> dict:
         """Return all available translations as {de, en, pl} keys."""
         result = {"de": None, "en": None, "pl": None}

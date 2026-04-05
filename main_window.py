@@ -7,6 +7,7 @@ Styl: Windows 98/2000 — pasuje do epoki EDIABAS 😄
 import sys
 import platform
 from pathlib import Path
+from html import escape as html_escape
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -16,7 +17,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QHeaderView, QTabWidget, QTableWidget,
     QTableWidgetItem, QDialog, QTextBrowser, QMessageBox
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon
 
 # Import naszego dekodera
@@ -38,6 +39,39 @@ try:
     CODING_AVAILABLE = True
 except Exception:
     CODING_AVAILABLE = False
+
+
+class TranslationWorker(QThread):
+    translationFinished = pyqtSignal(str, str, str, str, str)
+
+    def __init__(self, prg_file: str, job_name: str, text_de: str, lang: str, parent=None):
+        super().__init__(parent)
+        self.prg_file = prg_file
+        self.job_name = job_name
+        self.text_de = text_de
+        self.lang = lang
+
+    def run(self):
+        try:
+            from deep_translator import GoogleTranslator
+
+            lang_map = {"en": "english", "pl": "polish"}
+            translated = GoogleTranslator(source="german", target=lang_map[self.lang]).translate(self.text_de)
+            self.translationFinished.emit(
+                self.prg_file,
+                self.job_name,
+                self.lang,
+                translated or "",
+                self.text_de,
+            )
+        except Exception:
+            self.translationFinished.emit(
+                self.prg_file,
+                self.job_name,
+                self.lang,
+                "",
+                self.text_de,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +477,8 @@ class JobDetailPanel(QWidget):
         self._current_comments_de: str = "Brak komentarzy."
         self._db: Database | None = None
         self._lang: str = "de"
+        self._translation_workers: list[TranslationWorker] = []
+        self._translation_pending: set[tuple[str, str, str]] = set()
         self._setup_ui()
 
     def _setup_ui(self):
@@ -495,6 +531,7 @@ class JobDetailPanel(QWidget):
         self.job_comment_label = QLabel("—")
         self.job_comment_label.setWordWrap(True)
         self.job_comment_label.setFont(QFont("Tahoma", 13, QFont.Weight.Bold))
+        self.job_comment_label.setTextFormat(Qt.TextFormat.RichText)
         comment_layout.addWidget(self.job_comment_label)
 
         self.results_table = QTableWidget()
@@ -615,31 +652,142 @@ class JobDetailPanel(QWidget):
     def _refresh_translation(self):
         if not self._current_job:
             self.job_comment_label.setText("—")
+            self.job_comment_label.setToolTip("")
             self._set_translation_state("idle")
             return
 
-        translation = None
-        if self._db:
-            translation = self._db.get_translation(
-                self._current_prg_file,
-                self._current_job.name,
-                self._lang,
-            )
-
-        if translation:
-            self.job_comment_label.setText(translation)
-            self._set_translation_state("ok")
-            return
+        translation, is_live_translated = self._get_translation(
+            self._current_prg_file,
+            self._current_job.name,
+            self._current_comments_de,
+            self._lang,
+        )
 
         if self._lang == "de":
             self.job_comment_label.setText(self._current_comments_de)
+            self.job_comment_label.setToolTip("")
             self._set_translation_state("ok")
             return
 
-        self.job_comment_label.setText(
-            f"⚠️ Brak tłumaczenia ({self._lang.upper()}) — {self._current_comments_de}"
+        if translation != self._current_comments_de:
+            self._set_translation_text(
+                translation,
+                is_live_translated=False,
+                tooltip="",
+            )
+            return
+
+        self._set_translation_text(
+            self._current_comments_de,
+            is_live_translated=False,
+            tooltip="",
         )
-        self._set_translation_state("missing")
+
+    def _translation_key(self, prg_file: str, job_name: str, lang: str) -> tuple[str, str, str]:
+        return ((prg_file or "").upper(), job_name or "", (lang or "de").lower())
+
+    def _set_translation_text(
+        self,
+        text_de: str,
+        is_live_translated: bool,
+        fallback_missing: bool = False,
+        tooltip: str = "",
+    ):
+        safe_text = str(text_de or "")
+        rendered_text = html_escape(safe_text).replace("\n", "<br/>")
+        if fallback_missing:
+            html_text = (
+                f"<span>{rendered_text}</span> "
+                f"<span style='color:#808080; font-size: 9px;'>⚠️ brak tłumaczenia</span>"
+            )
+            self.job_comment_label.setText(html_text)
+            self.job_comment_label.setToolTip(
+                tooltip or "Brak tłumaczenia w bazie i brak połączenia z internetem"
+            )
+            self._set_translation_state("ok")
+            return
+
+        if is_live_translated:
+            html_text = (
+                f"<span>{rendered_text}</span> "
+                f"<span style='color:#808080; font-size: 9px;'>🌐 (auto)</span>"
+            )
+            self.job_comment_label.setText(html_text)
+            self.job_comment_label.setToolTip(
+                tooltip or "Tłumaczenie automatyczne — zapisano do bazy danych"
+            )
+        else:
+            self.job_comment_label.setText(safe_text)
+            self.job_comment_label.setToolTip(tooltip)
+        self._set_translation_state("ok")
+
+    def _start_translation_worker(self, prg_file: str, job_name: str, text_de: str, lang: str):
+        key = self._translation_key(prg_file, job_name, lang)
+        if key in self._translation_pending:
+            return
+
+        worker = TranslationWorker(prg_file, job_name, text_de, lang, self)
+        worker.translationFinished.connect(self._on_translation_finished)
+        worker.finished.connect(worker.deleteLater)
+        self._translation_pending.add(key)
+        self._translation_workers.append(worker)
+        worker.start()
+
+    def _on_translation_finished(self, prg_file: str, job_name: str, lang: str, translated_text: str, original_de: str):
+        key = self._translation_key(prg_file, job_name, lang)
+        self._translation_pending.discard(key)
+        self._translation_workers = [worker for worker in self._translation_workers if worker.isRunning()]
+
+        if translated_text and self._db:
+            try:
+                if lang == "en":
+                    self._db.save_translation(prg_file, job_name, comment_de=original_de, comment_en=translated_text)
+                elif lang == "pl":
+                    self._db.save_translation(prg_file, job_name, comment_de=original_de, comment_pl=translated_text)
+            except Exception:
+                pass
+
+        if not translated_text:
+            if (
+                self._current_prg_file == (prg_file or "").upper()
+                and self._current_job
+                and self._current_job.name == job_name
+                and self._lang == (lang or "de").lower()
+                and self._current_comments_de == original_de
+            ):
+                self._set_translation_text(
+                    original_de,
+                    is_live_translated=False,
+                    fallback_missing=True,
+                )
+            return
+
+        if (
+            self._current_prg_file == (prg_file or "").upper()
+            and self._current_job
+            and self._current_job.name == job_name
+            and self._lang == (lang or "de").lower()
+            and self._current_comments_de == original_de
+        ):
+            self._set_translation_text(
+                translated_text,
+                is_live_translated=True,
+                tooltip="Tłumaczenie automatyczne — zapisano do bazy danych",
+            )
+
+    def _get_translation(self, prg_file: str, job_name: str, text_de: str, lang: str) -> tuple[str, bool]:
+        lang = (lang or "de").lower()
+        if lang == "de" or not text_de:
+            return text_de, False
+
+        cached = None
+        if self._db:
+            cached = self._db.get_translation(prg_file, job_name, lang)
+        if cached:
+            return cached, False
+
+        self._start_translation_worker(prg_file, job_name, text_de, lang)
+        return text_de, False
 
     def _parse_job_comments(self, comments: list[str]) -> tuple[str, list[tuple[str, str, str]]]:
         job_comment = ""
