@@ -59,6 +59,9 @@ class TrcTranslator:
             return key
         return self._translations.get(normalized_key, key)
 
+    def get_translation(self, key: str) -> str:
+        return self.translate(key)
+
     def _normalize_key(self, key: str) -> str:
         return (key or "").strip().casefold()
 

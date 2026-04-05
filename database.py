@@ -261,6 +261,51 @@ class Database:
             )
         return result
 
+    def get_trc_history_by_id(self, record_id: int) -> dict | None:
+        try:
+            row = self.conn.execute(
+                """
+                SELECT id, model, module, module_file,
+                      content_before, content_after, notes,
+                        changed_options, vin, teilenummer,
+                      production_date, sa_codes, exported_at
+                FROM trc_history
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (int(record_id),),
+            ).fetchone()
+        except sqlite3.Error:
+            return None
+
+        if not row:
+            return None
+
+        try:
+            changed_options = json.loads(row["changed_options"] or "[]")
+        except Exception:
+            changed_options = []
+        try:
+            sa_codes = json.loads(row["sa_codes"] or "[]")
+        except Exception:
+            sa_codes = []
+
+        return {
+            "id": row["id"],
+            "model": row["model"],
+            "module": row["module"],
+            "module_file": row["module_file"],
+            "content_before": row["content_before"],
+            "content_after": row["content_after"],
+            "notes": row["notes"] if row["notes"] else "",
+            "changed_options": changed_options,
+            "vin": row["vin"] if row["vin"] else "",
+            "teilenummer": row["teilenummer"] if row["teilenummer"] else "",
+            "production_date": row["production_date"] if row["production_date"] else "",
+            "sa_codes": sa_codes,
+            "exported_at": row["exported_at"],
+        }
+
     def get_translation(self, prg_file: str, job_name: str, lang: str) -> Optional[str]:
         """Return translation for a job in one language: de/en/pl, else None."""
         lang_map = {

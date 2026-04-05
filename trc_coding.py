@@ -12,8 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPageSize
-from PyQt6.QtGui import QTextDocument
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -39,7 +38,6 @@ from PyQt6.QtWidgets import (
     QWidget,
     QHeaderView,
 )
-from PyQt6.QtPrintSupport import QPrinter
 
 from database import Database
 from daten_parser import detect_module_from_trc, load_module, parse_trc as parse_trc_file
@@ -336,30 +334,57 @@ class PathConfigDialog(QDialog):
 
 
 class ExportConfirmDialog(QDialog):
-    def __init__(self, changes: list[dict], parent=None):
+    def __init__(self, changes: list[dict], translator: TrcTranslator, module_file: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Potwierdzenie eksportu")
         self.setModal(True)
+        self._translator = translator
+        self._module_file = (module_file or "").strip()
         self._build_ui(changes)
+
+    def _tr(self, keyword: str) -> str:
+        text = str(keyword or "")
+        if not text:
+            return ""
+        translated = self._translator.get_translation(text)
+        return translated if translated else text
+
+    def _de_en(self, de_text: str) -> str:
+        de_value = str(de_text or "")
+        en_value = self._tr(de_value)
+        return f"{de_value} ({en_value})"
 
     def _build_ui(self, changes: list[dict]):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        label = QLabel("Eksportujesz następujące zmiany:")
+        module_text = self._module_file or "BRAK_MODULU"
+        label = QLabel(f"Podsumowanie zmian - {module_text}")
         layout.addWidget(label)
 
-        browser = QTextBrowser()
-        browser.setMinimumHeight(200)
-        lines = []
-        for change in changes:
-            option = change.get("option", "")
-            value_from = change.get("from", "")
-            value_to = change.get("to", "")
-            lines.append(f"- {option}: {value_from} -> {value_to}")
-        browser.setPlainText("\n".join(lines) if lines else "Brak zmian.")
-        layout.addWidget(browser)
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["Funkcja DE", "Funkcja EN", "Było DE (EN)", "Jest DE (EN)"])
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setRowCount(len(changes))
+
+        for row_index, change in enumerate(changes):
+            option_de = str(change.get("option") or "")
+            option_en = self._tr(option_de)
+            value_from = str(change.get("from") or "")
+            value_to = str(change.get("to") or "")
+
+            table.setItem(row_index, 0, QTableWidgetItem(option_de))
+            table.setItem(row_index, 1, QTableWidgetItem(option_en))
+            table.setItem(row_index, 2, QTableWidgetItem(self._de_en(value_from)))
+            table.setItem(row_index, 3, QTableWidgetItem(self._de_en(value_to)))
+
+        layout.addWidget(table, 1)
+        layout.addWidget(QLabel(f"Łącznie zmian: {len(changes)}"))
 
         notes_label = QLabel("Notatka (opcjonalnie):")
         layout.addWidget(notes_label)
@@ -381,7 +406,15 @@ class ExportConfirmDialog(QDialog):
 
 
 class HistoryCompareDialog(QDialog):
-    def __init__(self, versions: list[dict], history_rows: list[dict] | None = None, current_vin: str = "", parent=None):
+    def __init__(
+        self,
+        versions: list[dict],
+        history_rows: list[dict] | None = None,
+        current_vin: str = "",
+        db: Database | None = None,
+        translator: TrcTranslator | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("Historia i porównanie")
         self.setModal(True)
@@ -389,7 +422,35 @@ class HistoryCompareDialog(QDialog):
         self._all_history_rows = history_rows or []
         self._history_rows = list(self._all_history_rows)
         self._current_vin = (current_vin or "").strip().upper()
+        self._db = db
+        self._translator = translator
         self._build_ui()
+
+    def _tr(self, keyword: str) -> str:
+        text = str(keyword or "")
+        if not text:
+            return ""
+        if self._translator is None:
+            return text
+        translated = self._translator.get_translation(text)
+        return translated if translated else text
+
+    def _bilingual_html(self, de_text: str, en_text: str) -> str:
+        return (
+            f"<span style='font-weight:700'>{html_escape(de_text)}</span> "
+            f"<span style='color:#666666'>({html_escape(en_text)})</span>"
+        )
+
+    def _set_bilingual_value_cell(self, row: int, column: int, de_text: str, en_text: str, changed: bool):
+        label = QLabel()
+        label.setTextFormat(Qt.TextFormat.RichText)
+        label.setText(self._bilingual_html(de_text, en_text))
+        label.setContentsMargins(4, 2, 4, 2)
+        if changed:
+            label.setStyleSheet("QLabel { background-color: #FFE0E0; }")
+        else:
+            label.setStyleSheet("QLabel { background-color: #FFFFFF; }")
+        self.diff_table.setCellWidget(row, column, label)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -458,7 +519,7 @@ class HistoryCompareDialog(QDialog):
 
         self.diff_table = QTableWidget()
         self.diff_table.setColumnCount(4)
-        self.diff_table.setHorizontalHeaderLabels(["Opcja", "Wartość A", "Wartość B", "Zmiana"])
+        self.diff_table.setHorizontalHeaderLabels(["Funkcja DE", "Funkcja EN", "Plik 1 DE (EN)", "Plik 2 DE (EN)"])
         self.diff_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.diff_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.diff_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -490,10 +551,7 @@ class HistoryCompareDialog(QDialog):
     def _selected_history_entry(self) -> dict | None:
         row_index = self.history_table.currentRow()
         if row_index < 0:
-            row_index = 0
-        if row_index < 0 or row_index >= self.history_table.rowCount():
             return None
-
         item = self.history_table.item(row_index, 0)
         if not item:
             return None
@@ -518,81 +576,219 @@ class HistoryCompareDialog(QDialog):
         text = (content or "").replace("\r\n", "\n").replace("\r", "\n")
         return text.replace("\n", "\r\n")
 
-    def _pdf_html_for_entry(self, row: dict, before_content: str, after_content: str) -> str:
-        changes = row.get("changed_options") or []
-        change_rows = []
-        for change in changes if isinstance(changes, list) else []:
-            option = html_escape(str(change.get("option", "")))
-            value_from = html_escape(str(change.get("from", "")))
-            value_to = html_escape(str(change.get("to", "")))
-            change_rows.append(f"<tr><td>{option}</td><td>{value_from}</td><td>{value_to}</td></tr>")
+    def _apply_changes_to_content(self, base_content: str, changes: list[dict], value_key: str) -> str:
+        if not base_content.strip() or not changes:
+            return base_content
 
-        metadata_rows = [
-            ("VIN", row.get("vin", "")),
-            ("Model", row.get("model", "")),
-            ("Moduł", row.get("module", "")),
-            ("Nr części", row.get("teilenummer", "")),
-            ("Data prod.", row.get("production_date_display", "")),
-            ("Data eksportu", row.get("exported_at", "")),
-            ("Notatka", row.get("notes", "")),
-        ]
+        segments = parse_trc_content(base_content)
+        replacements: dict[str, str] = {}
+        for change in changes:
+            option = str(change.get("option") or "").strip().upper()
+            if not option:
+                continue
+            replacements[option] = str(change.get(value_key) or "")
 
-        metadata_html = "".join(
-            f"<tr><th>{html_escape(label)}</th><td>{html_escape(str(value or ''))}</td></tr>"
-            for label, value in metadata_rows
+        for segment in segments:
+            if segment.kind != "option":
+                continue
+            replacement = replacements.get(segment.option.strip().upper())
+            if replacement is not None:
+                segment.value = replacement
+
+        return format_trc_content(segments)
+
+    def _write_pdf_report(self, pdf_path: Path, row: dict, changes: list[dict]) -> None:
+        try:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+            from reportlab.lib.units import mm
+            from reportlab.pdfgen import canvas
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+        except Exception as exc:
+            raise RuntimeError(f"Brak biblioteki reportlab: {exc}")
+
+        class NumberedCanvas(canvas.Canvas):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._saved_page_states: list[dict] = []
+
+            def showPage(self):
+                self._saved_page_states.append(dict(self.__dict__))
+                self._startPage()
+
+            def save(self):
+                total_pages = len(self._saved_page_states)
+                for state in self._saved_page_states:
+                    self.__dict__.update(state)
+                    self.setFont("Helvetica", 8)
+                    self.setFillColor(colors.HexColor("#4A4A4A"))
+                    self.drawString(15 * mm, 8 * mm, "Wygenerowano przez BimmerDaten v0.2 - GPL-3.0")
+                    self.drawRightString(195 * mm, 8 * mm, f"Strona {self._pageNumber} / {total_pages}")
+                    super().showPage()
+                super().save()
+
+        doc = SimpleDocTemplate(
+            str(pdf_path),
+            pagesize=A4,
+            leftMargin=12 * mm,
+            rightMargin=12 * mm,
+            topMargin=12 * mm,
+            bottomMargin=16 * mm,
+        )
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "PdfTitle",
+            parent=styles["Heading2"],
+            fontName="Helvetica-Bold",
+            fontSize=12,
+            textColor=colors.HexColor("#000000"),
+            spaceAfter=0,
+        )
+        normal_style = ParagraphStyle(
+            "PdfNormal",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9,
+            leading=11,
+        )
+        centered_style = ParagraphStyle(
+            "PdfCentered",
+            parent=normal_style,
+            alignment=1,
+        )
+        changed_style = ParagraphStyle(
+            "ChangedCell",
+            parent=normal_style,
+            fontName="Helvetica-Bold",
+            textColor=colors.HexColor("#00008B"),
         )
 
-        changes_html = "".join(change_rows) if change_rows else "<tr><td colspan='3'>Brak zmian.</td></tr>"
+        module_name = str(row.get("module") or "")
+        module_file = str(row.get("module_file") or "")
+        module_display = module_name
+        if module_name and module_file:
+            module_display = f"{module_name} ({module_file})"
+        elif module_file:
+            module_display = module_file
 
-        before_html = html_escape(self._normalize_crlf(before_content))
-        after_html = html_escape(self._normalize_crlf(after_content))
+        metadata_rows = [
+            ["VIN:", str(row.get("vin") or "")],
+            ["Model:", str(row.get("model") or "")],
+            ["Moduł:", module_display],
+            ["Nr części:", str(row.get("teilenummer") or "")],
+            ["Data prod.:", str(row.get("production_date_display") or row.get("production_date") or "")],
+            ["Kodowano:", str(row.get("codierdatum") or "")],
+            ["Data eksportu:", str(row.get("exported_at") or "")],
+            ["Notatka:", str(row.get("notes") or "")],
+        ]
 
-        return f"""
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Tahoma, Arial, sans-serif; font-size: 10pt; color: #000; }}
-                h1 {{ font-size: 16pt; margin-bottom: 10px; }}
-                h2 {{ font-size: 12pt; margin-top: 18px; border-bottom: 1px solid #808080; padding-bottom: 3px; }}
-                table {{ width: 100%; border-collapse: collapse; margin-bottom: 12px; }}
-                th, td {{ border: 1px solid #808080; padding: 4px 6px; vertical-align: top; }}
-                th {{ width: 28%; background: #d4d0c8; text-align: left; }}
-                pre {{ white-space: pre-wrap; word-wrap: break-word; background: #ffffff; border: 1px solid #808080; padding: 8px; }}
-                .meta-table th {{ width: 25%; }}
-            </style>
-        </head>
-        <body>
-            <h1>FSW_PSW export</h1>
-            <h2>Metadane</h2>
-            <table class="meta-table">{metadata_html}</table>
+        story = []
+        header = Table(
+            [[Paragraph("BimmerDaten - FSW/PSW Export Report", title_style), Paragraph("BMW", centered_style)]],
+            colWidths=[doc.width * 0.82, doc.width * 0.18],
+        )
+        header.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#D4D0C8")),
+                    ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#808080")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        story.append(header)
+        story.append(Spacer(1, 6))
 
-            <h2>Zmiany</h2>
-            <table>
-                <tr><th>Opcja</th><th>Było</th><th>Jest</th></tr>
-                {changes_html}
-            </table>
+        meta_data = [[Paragraph(f"<b>{html_escape(label)}</b>", normal_style), Paragraph(html_escape(value), normal_style)] for label, value in metadata_rows]
+        meta_table = Table(meta_data, colWidths=[doc.width * 0.25, doc.width * 0.75])
+        meta_table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#909090")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F0F0F0")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
+        story.append(meta_table)
+        story.append(Spacer(1, 8))
 
-            <h2>FSW_PSW_before.TRC</h2>
-            <pre>{before_html}</pre>
+        if not changes:
+            story.append(Spacer(1, 14))
+            story.append(Paragraph("Brak zmian", centered_style))
+        else:
+            header_row = [
+                "Nr",
+                "Funkcja (DE)",
+                "Funkcja (EN)",
+                "Było (DE)",
+                "Było (EN)",
+                "Jest (DE)",
+                "Jest (EN)",
+            ]
+            table_rows = [header_row]
+            for index, change in enumerate(changes, start=1):
+                option_de = str(change.get("option") or "")
+                option_en = self._tr(option_de)
+                before_de = str(change.get("from") or "")
+                before_en = self._tr(before_de)
+                after_de = str(change.get("to") or "")
+                after_en = self._tr(after_de)
+                table_rows.append(
+                    [
+                        str(index),
+                        option_de,
+                        option_en,
+                        before_de,
+                        before_en,
+                        Paragraph(html_escape(after_de), changed_style),
+                        Paragraph(html_escape(after_en), changed_style),
+                    ]
+                )
 
-            <h2>FSW_PSW_after.TRC</h2>
-            <pre>{after_html}</pre>
-        </body>
-        </html>
-        """
+            changes_table = Table(
+                table_rows,
+                colWidths=[doc.width * 0.05, doc.width * 0.18, doc.width * 0.20, doc.width * 0.14, doc.width * 0.14, doc.width * 0.14, doc.width * 0.15],
+                repeatRows=1,
+            )
+            table_style_commands = [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4A4A4A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#A0A0A0")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+            for row_index in range(1, len(table_rows)):
+                bg_color = colors.white if row_index % 2 else colors.HexColor("#F5F5F5")
+                table_style_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), bg_color))
+                table_style_commands.append(("FONTNAME", (5, row_index), (6, row_index), "Helvetica-Bold"))
+                table_style_commands.append(("TEXTCOLOR", (5, row_index), (6, row_index), colors.HexColor("#00008B")))
 
-    def _write_pdf_report(self, pdf_path: Path, row: dict, before_content: str, after_content: str) -> None:
-        document = QTextDocument()
-        document.setHtml(self._pdf_html_for_entry(row, before_content, after_content))
+            changes_table.setStyle(TableStyle(table_style_commands))
+            story.append(changes_table)
 
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-        printer.setOutputFileName(str(pdf_path))
-        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-        document.print(printer)
+        doc.build(story, canvasmaker=NumberedCanvas)
 
     def _export_selected_history_entry(self):
-        row = self._selected_history_entry()
+        export_dialog = HistoryExportDialog(self._history_rows, db=self._db, parent=self)
+        if export_dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        row = export_dialog.selected_row()
         if not row:
             QMessageBox.information(self, "Eksport", "Wybierz wpis historii do eksportu.")
             return
@@ -611,14 +807,19 @@ class HistoryCompareDialog(QDialog):
 
         before_content = self._normalize_crlf(str(row.get("content_before") or ""))
         after_content = self._normalize_crlf(str(row.get("content_after") or ""))
-        before_path = export_dir / "FSW_PSW_before.TRC"
-        after_path = export_dir / "FSW_PSW_after.TRC"
+        changes = list(row.get("changed_options") or [])
+        if not before_content and after_content and changes:
+            before_content = self._normalize_crlf(self._apply_changes_to_content(after_content, changes, "from"))
+        elif not after_content and before_content and changes:
+            after_content = self._normalize_crlf(self._apply_changes_to_content(before_content, changes, "to"))
+        before_path = export_dir / "FSW_PSWbefore.TRC"
+        after_path = export_dir / "FSW_PSWafter.TRC"
         pdf_path = export_dir / "FSW_PSW_report.pdf"
 
         try:
             before_path.write_text(before_content, encoding="utf-8", newline="")
             after_path.write_text(after_content, encoding="utf-8", newline="")
-            self._write_pdf_report(pdf_path, row, before_content, after_content)
+            self._write_pdf_report(pdf_path, row, changes)
         except Exception as exc:
             QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać plików eksportu:\n{exc}")
             return
@@ -626,7 +827,7 @@ class HistoryCompareDialog(QDialog):
         QMessageBox.information(
             self,
             "Eksport",
-            f"Zapisano do:\n{export_dir}\n\nFSW_PSW_before.TRC\nFSW_PSW_after.TRC\nFSW_PSW_report.pdf",
+            f"Zapisano do:\n{export_dir}\n\nFSW_PSWbefore.TRC\nFSW_PSWafter.TRC\nFSW_PSW_report.pdf",
         )
 
     def _populate_vin_values(self):
@@ -761,22 +962,178 @@ class HistoryCompareDialog(QDialog):
 
         self.diff_table.setRowCount(len(rows))
         for row_index, (option, value_a, value_b, same) in enumerate(rows):
+            option_en = self._tr(option)
+            value_a_en = self._tr(value_a)
+            value_b_en = self._tr(value_b)
+
             option_item = QTableWidgetItem(option)
-            value_a_item = QTableWidgetItem(value_a)
-            value_b_item = QTableWidgetItem(value_b)
-            status_item = QTableWidgetItem("✅ same" if same else "⚠ different")
+            option_en_item = QTableWidgetItem(option_en)
 
             if not same:
-                for item in (option_item, value_a_item, value_b_item, status_item):
+                for item in (option_item, option_en_item):
                     item.setBackground(QColor("#FFE0E0"))
+                    item.setForeground(QColor("#000000"))
+            else:
+                for item in (option_item, option_en_item):
+                    item.setBackground(QColor("#FFFFFF"))
                     item.setForeground(QColor("#000000"))
 
             self.diff_table.setItem(row_index, 0, option_item)
-            self.diff_table.setItem(row_index, 1, value_a_item)
-            self.diff_table.setItem(row_index, 2, value_b_item)
-            self.diff_table.setItem(row_index, 3, status_item)
+            self.diff_table.setItem(row_index, 1, option_en_item)
+            self._set_bilingual_value_cell(row_index, 2, value_a, value_a_en, not same)
+            self._set_bilingual_value_cell(row_index, 3, value_b, value_b_en, not same)
 
         self.diff_table.resizeColumnsToContents()
+
+
+class HistoryExportDialog(QDialog):
+    def __init__(self, rows: list[dict], db: Database | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Eksport zapisanych zmian")
+        self.setModal(True)
+        self._rows = list(rows or [])
+        self._db = db
+        self._selected_row: dict | None = None
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        info_label = QLabel("Wybierz zapis z bazy danych do eksportu. Eksport dotyczy tylko danych zapisanych w DB.")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        self.rows_table = QTableWidget()
+        self.rows_table.setColumnCount(7)
+        self.rows_table.setHorizontalHeaderLabels([
+            "VIN",
+            "Model",
+            "Moduł",
+            "Nr części",
+            "Data prod.",
+            "Zmiany",
+            "Data eksportu",
+        ])
+        self.rows_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.rows_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.rows_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.rows_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.rows_table.horizontalHeader().setStretchLastSection(True)
+        self.rows_table.itemSelectionChanged.connect(self._update_preview)
+        layout.addWidget(self.rows_table, 1)
+
+        self.preview = QTextBrowser()
+        self.preview.setMinimumHeight(160)
+        layout.addWidget(self.preview)
+
+        button_row = QHBoxLayout()
+        button_row.addStretch()
+        self.cancel_button = QPushButton("Anuluj")
+        self.export_button = QPushButton("Eksportuj")
+        self.cancel_button.clicked.connect(self.reject)
+        self.export_button.clicked.connect(self._accept_selection)
+        button_row.addWidget(self.cancel_button)
+        button_row.addWidget(self.export_button)
+        layout.addLayout(button_row)
+
+        self._fill_rows()
+        if self.rows_table.rowCount() > 0:
+            self.rows_table.setCurrentCell(0, 0)
+        else:
+            self.preview.setPlainText("Brak zapisanych zmian w bazie danych.")
+            self.export_button.setEnabled(False)
+
+    def _fill_rows(self):
+        self.rows_table.setRowCount(len(self._rows))
+        for row_index, row in enumerate(self._rows):
+            values = [
+                str(row.get("vin") or ""),
+                str(row.get("model") or ""),
+                str(row.get("module") or ""),
+                str(row.get("teilenummer") or ""),
+                str(row.get("production_date_display") or ""),
+                str(row.get("changes_text") or ""),
+                str(row.get("exported_at") or ""),
+            ]
+            for column_index, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, row)
+                self.rows_table.setItem(row_index, column_index, item)
+
+    def _current_row(self) -> dict | None:
+        row_index = self.rows_table.currentRow()
+        if row_index < 0 or row_index >= len(self._rows):
+            return None
+        return self._rows[row_index]
+
+    def _current_full_row(self) -> dict | None:
+        row = self._current_row()
+        if not row:
+            return None
+
+        record_id = int(row.get("id") or 0)
+        if self._db and record_id > 0:
+            full_row = self._db.get_trc_history_by_id(record_id)
+            if full_row:
+                production_display = str(row.get("production_date_display") or "").strip()
+                if production_display and not full_row.get("production_date_display"):
+                    full_row["production_date_display"] = production_display
+                return full_row
+
+        return row
+
+    def _update_preview(self):
+        row = self._current_full_row()
+        if not row:
+            self.preview.setPlainText("Brak wyboru.")
+            return
+
+        before_content = str(row.get("content_before") or "")
+        after_content = str(row.get("content_after") or "")
+        changes = row.get("changed_options") or []
+        notes = str(row.get("notes") or "").strip()
+        change_lines = []
+        for change in changes:
+            option = str(change.get("option") or "")
+            value_from = str(change.get("from") or "")
+            value_to = str(change.get("to") or "")
+            change_lines.append(f"- {option}: {value_from} -> {value_to}")
+        lines = [
+            f"VIN: {row.get('vin', '')}",
+            f"Model: {row.get('model', '')}",
+            f"Moduł: {row.get('module', '')}",
+            f"Nr części: {row.get('teilenummer', '')}",
+            f"Data prod.: {row.get('production_date_display', '')}",
+            f"Data eksportu: {row.get('exported_at', '')}",
+            f"Notatka: {notes or 'brak'}",
+            f"Liczba zmian: {len(change_lines)}",
+            "",
+            "Zmiany z changed_options:",
+        ]
+
+        lines.extend(change_lines or ["Brak zapisanych zmian."])
+        if before_content or after_content:
+            lines.extend([
+                "",
+                "Dane TRC zapisane w DB:",
+                f"content_before: {len(before_content)} znaków",
+                f"content_after: {len(after_content)} znaków",
+            ])
+
+        self.preview.setPlainText("\n".join(lines))
+
+    def _accept_selection(self):
+        row = self._current_full_row()
+        if not row:
+            QMessageBox.information(self, "Eksport", "Wybierz wpis z listy.")
+            return
+        self._selected_row = row
+        self.accept()
+
+    def selected_row(self) -> dict | None:
+        return self._selected_row
 
 
 class ModuleDetectDialog(QDialog):
@@ -1682,14 +2039,24 @@ class CodingPanel(QWidget):
             return
 
         if extension.upper() == ".MAN":
-            confirm = ExportConfirmDialog(changes, self)
+            confirm = ExportConfirmDialog(
+                changes,
+                self._translator,
+                self._current_module_file or self._current_module,
+                self,
+            )
             if confirm.exec() != QDialog.DialogCode.Accepted:
                 return
 
             export_path = DEFAULT_MAND_PATH
             notes = confirm.notes()
         else:
-            confirm = ExportConfirmDialog(changes, self)
+            confirm = ExportConfirmDialog(
+                changes,
+                self._translator,
+                self._current_module_file or self._current_module,
+                self,
+            )
             if confirm.exec() != QDialog.DialogCode.Accepted:
                 return
 
@@ -1744,6 +2111,7 @@ class CodingPanel(QWidget):
         for segment_index in self._option_rows:
             self._segments[segment_index].original_value = self._segments[segment_index].value
         self._render_table()
+
         QMessageBox.information(self, "Eksport", f"Zapisano do:\n{export_path}")
 
     def open_history_dialog(self):
@@ -1752,7 +2120,14 @@ class CodingPanel(QWidget):
             QMessageBox.information(self, "Historia", "Brak danych do porównania.")
             return
 
-        dialog = HistoryCompareDialog(versions, history_rows=history_rows, current_vin=current_vin, parent=self)
+        dialog = HistoryCompareDialog(
+            versions,
+            history_rows=history_rows,
+            current_vin=current_vin,
+            db=self._db,
+            translator=self._translator,
+            parent=self,
+        )
         dialog.exec()
 
     def _build_history_versions(self) -> tuple[list[dict], list[dict], str]:
