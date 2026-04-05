@@ -443,6 +443,8 @@ class CodingPanel(QWidget):
         self._row_editable: dict[int, bool] = {}
         self._module_options: set[str] = set()
         self._module_options_cache: dict[tuple[str, str], set[str]] = {}
+        self._module_params_by_option: dict[str, list[dict]] = {}
+        self._module_loaded = False
         self._available_models: list[str] = []
         self._modules_by_model: dict[str, list[str]] = {}
         self._current_model = ""
@@ -450,6 +452,7 @@ class CodingPanel(QWidget):
         self._current_module_file = ""
         self._current_trc_content = ""
         self._baseline_content = ""
+        self._trc_loaded = False
         self._setup_ui()
         self._refresh_warning_state()
         self.reload_model_tree()
@@ -488,12 +491,14 @@ class CodingPanel(QWidget):
         self.module_combo.currentIndexChanged.connect(self._on_module_changed)
         left_layout.addWidget(self.module_combo)
 
-        self.detect_module_button = QPushButton("🔍 Wykryj moduł z TRC")
+        self.detect_module_button = QPushButton("🔍 Wykryj moduł")
         self.detect_module_button.clicked.connect(self.detect_module_from_current_trc)
+        self.detect_module_button.setEnabled(False)
         left_layout.addWidget(self.detect_module_button)
 
         self.load_trc_button = QPushButton("📂 Załaduj TRC")
         self.load_trc_button.clicked.connect(self.load_selected_trc)
+        self.load_trc_button.setEnabled(False)
         left_layout.addWidget(self.load_trc_button)
         left_layout.addStretch(1)
 
@@ -517,7 +522,7 @@ class CodingPanel(QWidget):
         table_layout.setContentsMargins(0, 0, 0, 0)
         table_layout.setSpacing(4)
 
-        self.context_label = QLabel("Wybierz model i moduł")
+        self.context_label = QLabel("Wybierz model, następnie załaduj TRC")
         self.context_label.setWordWrap(True)
         table_layout.addWidget(self.context_label)
 
@@ -615,6 +620,12 @@ class CodingPanel(QWidget):
         self._current_model = ""
         self._current_module = ""
         self._current_module_file = ""
+        self._module_options = set()
+        self._module_params_by_option = {}
+        self._module_loaded = False
+        self._trc_loaded = False
+        self.load_trc_button.setEnabled(False)
+        self.detect_module_button.setEnabled(False)
 
         daten_path = Path(self._paths.daten_path)
         if daten_path.exists():
@@ -649,39 +660,59 @@ class CodingPanel(QWidget):
         if select_first:
             self.model_combo.setCurrentIndex(0)
         else:
-            self.context_label.setText("Wybierz model i moduł")
+            self.context_label.setText("Wybierz model, następnie załaduj TRC")
 
     def _on_model_changed(self, index: int):
         if index < 0:
             return
         model_name = self.model_combo.currentText().strip().upper()
         self._current_model = model_name
+        self._current_module = ""
+        self._current_module_file = ""
+        self._module_options = set()
+        self._module_params_by_option = {}
+        self._module_loaded = False
+        self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
+        if self._segments:
+            self._render_table()
         self.module_combo.blockSignals(True)
         self.module_combo.clear()
+        self.module_combo.addItem("-- wybierz moduł --", "")
         for module_file in self._modules_by_model.get(model_name, []):
-            self.module_combo.addItem(module_file)
+            self.module_combo.addItem(module_file, module_file)
         self.module_combo.blockSignals(False)
 
-        if self.module_combo.count() > 0:
-            self.module_combo.setCurrentIndex(0)
-            self._on_module_changed(0)
+        self.module_combo.setCurrentIndex(0)
+        self.load_trc_button.setEnabled(True)
+        self.detect_module_button.setEnabled(self._trc_loaded)
+        if self._trc_loaded:
+            self.context_label.setText("TRC załadowane. Wybierz moduł lub użyj wykrywania, aby dopasować opcje.")
         else:
+            self.context_label.setText(f"Model: {model_name} | Krok 2: kliknij '📂 Załaduj TRC'")
+
+    def _on_module_changed(self, index: int):
+        if index < 0 or not self._current_model:
+            return
+        module_file = (self.module_combo.currentData() or self.module_combo.currentText() or "").strip()
+        if not module_file or module_file.startswith("--"):
             self._current_module = ""
             self._current_module_file = ""
             self._module_options = set()
-            self.context_label.setText(f"Model: {model_name} | Brak plików .Cxx")
-            self._render_table()
-
-    def _on_module_changed(self, index: int):
-        if index < 0:
+            self._module_params_by_option = {}
+            self._module_loaded = False
+            if self._segments:
+                self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
+                self._render_table()
+                self.context_label.setText("TRC załadowane bez filtrowania modułu.")
             return
-        module_file = self.module_combo.currentText().strip()
+
         self._current_module_file = module_file
         self._current_module = module_file.split(".", 1)[0].upper() if module_file else ""
 
         cache_key = (self._current_model, module_file.upper())
         if cache_key in self._module_options_cache:
             self._module_options = self._module_options_cache[cache_key]
+            parsed_options = []
         else:
             parsed_options = load_module(self._paths.daten_path, self._current_model, module_file)
             option_names = {
@@ -692,13 +723,28 @@ class CodingPanel(QWidget):
             self._module_options_cache[cache_key] = option_names
             self._module_options = option_names
 
-        self.context_label.setText(f"Model: {self._current_model} | Moduł: {self._current_module_file}")
+        # Always refresh params map from parsed module so editors can show all allowed values.
+        self._module_params_by_option = {}
+        if not parsed_options:
+            parsed_options = load_module(self._paths.daten_path, self._current_model, module_file)
+        for option in parsed_options:
+            option_name = str(option.get("name", "")).strip().upper()
+            params = option.get("params") or []
+            if option_name:
+                self._module_params_by_option[option_name] = list(params)
+        self._module_loaded = bool(self._module_params_by_option)
+
         if self._segments:
-            self._render_table()
+            self._apply_module_filter_to_table()
+        else:
+            self.context_label.setText(f"Model: {self._current_model} | Moduł: {self._current_module_file}")
 
     def detect_module_from_current_trc(self):
         if not self._current_model:
             QMessageBox.information(self, "Wykrywanie", "Najpierw wybierz model.")
+            return
+        if not self._trc_loaded:
+            QMessageBox.information(self, "Wykrywanie", "Najpierw załaduj FSW_PSW.TRC.")
             return
 
         trc_path = Path(self._paths.trc_path)
@@ -725,20 +771,18 @@ class CodingPanel(QWidget):
         if module_index >= 0:
             self.module_combo.setCurrentIndex(module_index)
 
-        self.context_label.setText(
-            f"Wykryto moduł: {module_file} ({int(round(ratio * 100))}%). Możesz załadować TRC."
-        )
+        self.context_label.setText(f"Wykryto moduł: {module_file} ({int(round(ratio * 100))}%).")
 
     def load_selected_trc(self):
-        if not self._current_module_file:
-            QMessageBox.information(self, "TRC", "Najpierw wybierz moduł.")
+        if not self._current_model:
+            QMessageBox.information(self, "TRC", "Najpierw wybierz model.")
             return
         self.load_trc_from_path(Path(self._paths.trc_path))
 
     def reload_current_trc(self):
         self._refresh_warning_state()
-        if not self._current_module_file:
-            self.context_label.setText("Wybierz model i moduł, aby wczytać FSW_PSW.TRC")
+        if not self._current_model:
+            self.context_label.setText("Wybierz model, aby wczytać FSW_PSW.TRC")
             return
         self.load_trc_from_path(Path(self._paths.trc_path))
 
@@ -749,6 +793,8 @@ class CodingPanel(QWidget):
             self._row_editable = {}
             self._current_trc_content = ""
             self._baseline_content = ""
+            self._trc_loaded = False
+            self.detect_module_button.setEnabled(False)
             self._render_table()
             self.context_label.setText(f"Nie znaleziono pliku: {trc_path}")
             return
@@ -758,20 +804,40 @@ class CodingPanel(QWidget):
         self._baseline_content = content
         self._segments = parse_trc_content(content)
         self._option_rows = [index for index, segment in enumerate(self._segments) if segment.kind == "option"]
-        self._row_editable = {}
+        self._trc_loaded = True
+        self.detect_module_button.setEnabled(True)
 
+        if self._current_module_file:
+            self._apply_module_filter_to_table()
+        else:
+            self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
+            self._render_table()
+            self.context_label.setText(
+                f"Załadowano TRC ({len(self._option_rows)} opcji). Krok 3: wybierz moduł lub użyj '🔍 Wykryj moduł'."
+            )
+
+    def _apply_module_filter_to_table(self):
+        self._row_editable = {}
         matched = 0
         total = len(self._option_rows)
         for row_index, segment_index in enumerate(self._option_rows):
             option_name = self._segments[segment_index].option.strip().upper()
-            editable = option_name in self._module_options
+            editable = option_name in self._module_options if self._module_loaded else True
             self._row_editable[row_index] = editable
             if editable:
                 matched += 1
 
         percentage = int(round((matched / total) * 100)) if total else 0
         self._render_table()
-        self.context_label.setText(f"Załadowano: {self._current_module_file} — {matched}/{total} opcji dopasowanych ({percentage}%)")
+
+        if self._module_loaded:
+            self.context_label.setText(
+                f"Załadowano: {self._current_module_file} — {matched}/{total} opcji dopasowanych ({percentage}%)"
+            )
+        else:
+            self.context_label.setText(
+                f"Model: {self._current_model} | Moduł: {self._current_module_file} — brak opisu .Cxx"
+            )
 
     def _render_table(self):
         self.trc_table.setRowCount(len(self._option_rows))
@@ -789,10 +855,16 @@ class CodingPanel(QWidget):
             translation_item = QTableWidgetItem(self._translator.translate(segment.option))
             translation_item.setFlags(translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-            value_edit = QLineEdit(segment.value)
-            value_edit.textChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text))
-            value_edit.setMinimumWidth(180)
-            value_edit.setReadOnly(not editable)
+            option_name_upper = segment.option.strip().upper()
+            params = self._module_params_by_option.get(option_name_upper, []) if self._module_loaded else []
+
+            if editable and params:
+                value_editor = self._build_value_combo(row_index, segment.value, params)
+            else:
+                value_editor = QLineEdit(segment.value)
+                value_editor.textChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text))
+                value_editor.setMinimumWidth(180)
+                value_editor.setReadOnly(not editable)
 
             value_translation_item = QTableWidgetItem(self._translator.translate(segment.value))
             value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -803,7 +875,7 @@ class CodingPanel(QWidget):
             self.trc_table.setItem(row_index, 0, number_item)
             self.trc_table.setItem(row_index, 1, option_item)
             self.trc_table.setItem(row_index, 2, translation_item)
-            self.trc_table.setCellWidget(row_index, 3, value_edit)
+            self.trc_table.setCellWidget(row_index, 3, value_editor)
             self.trc_table.setItem(row_index, 4, value_translation_item)
             self.trc_table.setItem(row_index, 5, changed_item)
             self._apply_row_style(row_index)
@@ -827,6 +899,43 @@ class CodingPanel(QWidget):
 
         self._apply_row_style(row_index)
         self._update_change_count()
+
+    def _build_value_combo(self, row_index: int, current_value: str, params: list[dict]) -> QComboBox:
+        combo = QComboBox()
+        combo.setMinimumWidth(180)
+        combo.setEditable(False)
+
+        names = [str(param.get("name", "")).strip() for param in params if str(param.get("name", "")).strip()]
+        if current_value not in names:
+            combo.addItem(f"⚠️ {current_value}", current_value)
+            combo.setItemData(0, f"{current_value} (unknown)", Qt.ItemDataRole.ToolTipRole)
+
+        for param in params:
+            name = str(param.get("name", "")).strip()
+            if not name:
+                continue
+            data_value = int(param.get("data", 0)) & 0xFF
+            combo.addItem(name, name)
+            combo.setItemData(combo.count() - 1, f"{name} (0x{data_value:02X})", Qt.ItemDataRole.ToolTipRole)
+
+        target_index = combo.findData(current_value)
+        if target_index < 0:
+            target_index = combo.findText(current_value)
+        if target_index >= 0:
+            combo.setCurrentIndex(target_index)
+
+        combo.currentIndexChanged.connect(lambda idx, row=row_index, widget=combo: self._on_combo_value_changed(row, widget, idx))
+        return combo
+
+    def _on_combo_value_changed(self, row_index: int, combo: QComboBox, index: int):
+        if row_index < 0 or row_index >= len(self._option_rows):
+            return
+        if index < 0:
+            return
+        value = combo.currentText()
+        if value.startswith("⚠️ "):
+            value = value[3:].strip()
+        self._on_value_changed(row_index, value)
 
     def _apply_row_style(self, row_index: int):
         if row_index < 0 or row_index >= len(self._option_rows):
@@ -858,12 +967,20 @@ class CodingPanel(QWidget):
                 value_widget.setStyleSheet("background-color: #FFFF99; color: #000000;")
             else:
                 value_widget.setStyleSheet("")
+        elif isinstance(value_widget, QComboBox):
+            if not editable:
+                value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
+            elif changed:
+                value_widget.setStyleSheet("background-color: #FFFF99; color: #000000;")
+            else:
+                value_widget.setStyleSheet("")
 
         status_item = self.trc_table.item(row_index, 5)
         if status_item:
             status_item.setText("Tak" if changed and editable else "Nie")
 
     def _update_change_count(self):
+        self._sync_values_from_widgets()
         changed_count = 0
         for segment_index in self._option_rows:
             segment = self._segments[segment_index]
@@ -871,10 +988,23 @@ class CodingPanel(QWidget):
                 changed_count += 1
         self.change_count_label.setText(f"Zmieniono: {changed_count} opcji")
 
+    def _sync_values_from_widgets(self):
+        for row_index, segment_index in enumerate(self._option_rows):
+            widget = self.trc_table.cellWidget(row_index, 3)
+            if isinstance(widget, QLineEdit):
+                self._segments[segment_index].value = widget.text()
+            elif isinstance(widget, QComboBox):
+                value = widget.currentText()
+                if value.startswith("⚠️ "):
+                    value = value[3:].strip()
+                self._segments[segment_index].value = value
+
     def _current_content(self) -> str:
+        self._sync_values_from_widgets()
         return format_trc_content(self._segments)
 
     def _current_changes(self) -> list[dict]:
+        self._sync_values_from_widgets()
         return build_change_list(self._segments)
 
     def export_current_file(self, extension: str):
