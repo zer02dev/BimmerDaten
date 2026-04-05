@@ -1666,6 +1666,11 @@ class CodingPanel(QWidget):
         self._sync_values_from_widgets()
         return format_trc_content(self._segments)
 
+    def _current_baseline_content(self) -> str:
+        if self._trc_loaded and self._segments:
+            return self._current_content()
+        return ""
+
     def _current_changes(self) -> list[dict]:
         self._sync_values_from_widgets()
         return build_change_list(self._segments)
@@ -1743,7 +1748,7 @@ class CodingPanel(QWidget):
 
     def open_history_dialog(self):
         versions, history_rows, current_vin = self._build_history_versions()
-        if len(versions) < 1:
+        if len(history_rows) < 1 and not self._current_baseline_content():
             QMessageBox.information(self, "Historia", "Brak danych do porównania.")
             return
 
@@ -1752,22 +1757,8 @@ class CodingPanel(QWidget):
 
     def _build_history_versions(self) -> tuple[list[dict], list[dict], str]:
         versions: list[dict] = []
-        history_rows: list[dict] = []
-        work_folder = str(Path(self._paths.trc_path).parent) if self._paths.trc_path else str(DEFAULT_WORK_PATH)
-        sysdaten_current = parse_sysdaten(work_folder)
-        current_vin = str(sysdaten_current.get("FAHRGESTELL_NR", "")).strip().upper()
-        current_label = f"Aktualny plik ({Path(self._paths.trc_path).name})"
-        versions.append(
-            {
-                "label": current_label,
-                "content": self._current_content(),
-                "source": "current",
-                "vin": current_vin,
-            }
-        )
-
-        if self._db and self._current_model and self._current_module:
-            history_rows = self._db.get_trc_history(self._current_model, self._current_module, limit=50)
+        if self._db:
+            history_rows = self._db.list_all_trc_history(limit=200)
             for row in history_rows:
                 label = self._format_history_label(row)
                 versions.append(
@@ -1778,6 +1769,25 @@ class CodingPanel(QWidget):
                         "vin": str(row.get("vin") or "").strip().upper(),
                     }
                 )
+        else:
+            history_rows = []
+
+        work_folder = str(Path(self._paths.trc_path).parent) if self._paths.trc_path else str(DEFAULT_WORK_PATH)
+        sysdaten_current = parse_sysdaten(work_folder)
+        current_vin = str(sysdaten_current.get("FAHRGESTELL_NR", "")).strip().upper()
+
+        current_content = self._current_baseline_content()
+        if current_content:
+            current_label = f"Aktualny plik ({Path(self._paths.trc_path).name})"
+            versions.insert(
+                0,
+                {
+                    "label": current_label,
+                    "content": current_content,
+                    "source": "current",
+                    "vin": current_vin,
+                },
+            )
 
         overview_rows: list[dict] = []
         for row in history_rows:

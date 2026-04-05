@@ -215,6 +215,52 @@ class Database:
     def get_trc_history(self, model: str, module: str, limit: int = 50) -> list[dict]:
         return self.list_trc_history(model, module, limit=limit)
 
+    def list_all_trc_history(self, limit: int = 200) -> list[dict]:
+        try:
+            rows = self.conn.execute(
+                """
+                SELECT id, model, module, module_file,
+                      content_before, content_after, notes,
+                        changed_options, vin, teilenummer,
+                      production_date, sa_codes, exported_at
+                FROM trc_history
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (int(limit),),
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+
+        result: list[dict] = []
+        for row in rows:
+            try:
+                changed_options = json.loads(row["changed_options"] or "[]")
+            except Exception:
+                changed_options = []
+            try:
+                sa_codes = json.loads(row["sa_codes"] or "[]")
+            except Exception:
+                sa_codes = []
+            result.append(
+                {
+                    "id": row["id"],
+                    "model": row["model"],
+                    "module": row["module"],
+                    "module_file": row["module_file"],
+                    "content_before": row["content_before"],
+                    "content_after": row["content_after"],
+                    "notes": row["notes"] if row["notes"] else "",
+                    "changed_options": changed_options,
+                    "vin": row["vin"] if row["vin"] else "",
+                    "teilenummer": row["teilenummer"] if row["teilenummer"] else "",
+                    "production_date": row["production_date"] if row["production_date"] else "",
+                    "sa_codes": sa_codes,
+                    "exported_at": row["exported_at"],
+                }
+            )
+        return result
+
     def get_translation(self, prg_file: str, job_name: str, lang: str) -> Optional[str]:
         """Return translation for a job in one language: de/en/pl, else None."""
         lang_map = {
