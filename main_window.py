@@ -1853,7 +1853,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         
         # App name (bold, large)
-        app_name_label = QLabel("")
+        app_name_label = QLabel("BimmerDaten")
         app_name_font = QFont("Tahoma", 16, QFont.Weight.Bold)
         app_name_label.setFont(app_name_font)
         layout.addWidget(app_name_label)
@@ -1865,12 +1865,33 @@ class MainWindow(QMainWindow):
         # Description
         description_text = (
             "<b>Opis:</b><br>"
-            "Przeglądarka i dokumentacja plików BMW EDIABAS .prg oraz .trc. "
-            "Uzupełnienie Tool32 — tłumaczy i dokumentuje joby diagnostyczne BMW E-series."
+            "Narzędzie do pracy z BMW EDIABAS i NCS Expert. "
+            "Pozwala przeglądać pliki .PRG, tabelki i joby, analizować oraz edytować kodowanie TRC, "
+            "eksportować zmiany do .MAN i .TRC, przeglądać historię zapisów z bazy danych, "
+            "generować raporty PDF oraz korzystać z tłumaczeń jobów i opcji w locie."
         )
         description_label = QLabel(description_text)
         description_label.setWordWrap(True)
         layout.addWidget(description_label)
+
+        features_text = (
+            "<b>Najważniejsze funkcje:</b><br>"
+            "<ul style='margin-top: 6px; margin-bottom: 0;'>"
+            "<li>kodowanie TRC z podglądem zmian i historią</li>"
+            "<li>eksport .MAN / .TRC z kontrolą profilu NCS Expert</li>"
+            "<li>dwujęzyczne tłumaczenia DE / EN / PL z zapisem do SQLite</li>"
+            "<li>podgląd jobów, tabel i danych INPA / EDIABAS</li>"
+            "<li>raporty PDF z metadanymi i listą zmian</li>"
+            "</ul>"
+        )
+        features_label = QTextBrowser()
+        features_label.setHtml(features_text)
+        features_label.setMaximumHeight(160)
+        features_label.setStyleSheet(
+            "QTextBrowser { border: 1px inset #808080; "
+            "background-color: #ffffff; padding: 6px; }"
+        )
+        layout.addWidget(features_label)
         
         # License
         license_text = (
@@ -1892,8 +1913,6 @@ class MainWindow(QMainWindow):
         credits_text = (
             "<b>Zależności i źródła:</b><br>"
             "<ul style='margin-top: 6px; margin-bottom: 0;'>"
-            "<li>BimmerDis by radelbro (GPL-3.0)</li>"
-            "<li>ediabaslib by uholeschak (GPL-3.0)</li>"
             "<li>deep-translator</li>"
             "<li>PyQt6</li>"
             "</ul>"

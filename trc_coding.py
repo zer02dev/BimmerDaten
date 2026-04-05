@@ -6,13 +6,14 @@ Panel kodowania NCS Expert oraz narzędzia do pracy z plikami TRC.
 from __future__ import annotations
 
 import os
+import configparser
 import json
 import re
 from html import escape as html_escape
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal, QSettings
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
@@ -43,6 +44,11 @@ from PyQt6.QtWidgets import (
 from database import Database
 from daten_parser import detect_module_from_trc, load_module, parse_trc as parse_trc_file
 from trc_translator import TrcTranslator
+
+try:
+    import winreg
+except Exception:
+    winreg = None
 
 
 DEFAULT_TRC_PATH = Path(r"C:\NCSEXPER\WORK\FSW_PSW.TRC")
@@ -76,6 +82,174 @@ def read_text_file(path: Path) -> str:
         except Exception:
             continue
     return path.read_text(encoding="latin1", errors="ignore")
+
+
+def _read_ncs_last_profile_name() -> str:
+    if winreg is None:
+        return ""
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\BMWGroup\ISSS\NCSExpert") as key:
+            value, _ = winreg.QueryValueEx(key, "LastProfile")
+            return str(value or "").strip()
+    except Exception:
+        return ""
+
+
+def _parse_pfl_profile(pfl_path: Path) -> dict:
+    result = {
+        "profile_name": pfl_path.stem,
+        "can_read": False,
+        "can_write": False,
+        "profile_path": str(pfl_path),
+    }
+
+    try:
+        text = read_text_file(pfl_path)
+    except Exception:
+        return result
+
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.optionxform = str
+    try:
+        parser.read_string(text)
+    except Exception:
+        parser = None
+
+    values: dict[str, str] = {}
+    if parser is not None:
+        for section_name in parser.sections():
+            for key, value in parser.items(section_name):
+                values[key.strip().casefold()] = str(value).strip()
+        for key, value in parser.defaults().items():
+            values[key.strip().casefold()] = str(value).strip()
+
+    if not values:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith((";", "#", "[")):
+                continue
+            if "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            values[key.strip().casefold()] = value.strip()
+
+    def _is_enabled(name: str) -> bool:
+        return values.get(name.casefold(), "").strip() in {"1", "true", "yes", "tak", "on"}
+
+    result["can_read"] = _is_enabled("FswPswLesenModus")
+    result["can_write"] = _is_enabled("FswPswManipulieren") and _is_enabled("FktSgCodieren")
+
+    for key in ("profile_name", "profilname", "name"):
+        if values.get(key):
+            result["profile_name"] = values[key].strip()
+            break
+
+    return result
+
+
+def _collect_pfl_profiles(base_path: Path) -> list[dict]:
+    profiles: list[dict] = []
+    if not base_path.exists():
+        return profiles
+
+    pfl_files = sorted(
+        [path for path in base_path.rglob("*") if path.is_file() and path.suffix.casefold() == ".pfl"],
+        key=lambda path: str(path).casefold(),
+    )
+
+    profile_hint = _read_ncs_last_profile_name().strip()
+    hint_stem = Path(profile_hint).stem.casefold() if profile_hint else ""
+    hint_name = profile_hint.casefold()
+
+    for pfl_file in pfl_files:
+        info = _parse_pfl_profile(pfl_file)
+        can_read = bool(info.get("can_read"))
+        can_write = bool(info.get("can_write"))
+        if can_write:
+            status = "full"
+            status_label = "pełny dostęp (odczyt + zapis)"
+            color = "#228B22"
+        elif can_read:
+            status = "read"
+            status_label = "tylko odczyt"
+            color = "#FFD700"
+        else:
+            status = "blocked"
+            status_label = "brak wymaganych uprawnień"
+            color = "#FF8C00"
+
+        profile_name = str(info.get("profile_name") or pfl_file.stem).strip() or pfl_file.stem
+        profiles.append(
+            {
+                "found": True,
+                "profile_name": profile_name,
+                "can_read": can_read,
+                "can_write": can_write,
+                "profile_path": str(pfl_file),
+                "status": status,
+                "status_label": status_label,
+                "color": color,
+                "is_selected": bool(profile_hint) and (
+                    pfl_file.stem.casefold() == hint_stem or pfl_file.name.casefold() == hint_name
+                ),
+            }
+        )
+
+    return profiles
+
+
+def check_ncs_profile(ncs_path: str) -> dict:
+    default_root = r"C:\NCSEXPER\\"
+    base_path = Path((ncs_path or default_root).strip() or default_root)
+    if base_path.is_file() and base_path.suffix.lower() == ".pfl":
+        info = _parse_pfl_profile(base_path)
+        info["found"] = True
+        return {
+            "found": True,
+            "profile_name": info.get("profile_name", base_path.stem),
+            "can_read": bool(info.get("can_read")),
+            "can_write": bool(info.get("can_write")),
+            "profile_path": str(base_path),
+            "profiles": [
+                {
+                    "found": True,
+                    "profile_name": info.get("profile_name", base_path.stem),
+                    "can_read": bool(info.get("can_read")),
+                    "can_write": bool(info.get("can_write")),
+                    "profile_path": str(base_path),
+                    "status": "full" if info.get("can_write") else "read" if info.get("can_read") else "blocked",
+                    "status_label": "pełny dostęp (odczyt + zapis)"
+                    if info.get("can_write")
+                    else "tylko odczyt"
+                    if info.get("can_read")
+                    else "brak wymaganych uprawnień",
+                    "color": "#228B22" if info.get("can_write") else "#FFD700" if info.get("can_read") else "#FF8C00",
+                    "is_selected": True,
+                }
+            ],
+        }
+
+    profiles = _collect_pfl_profiles(base_path)
+    if profiles:
+        selected_profile = next((profile for profile in profiles if profile.get("is_selected")), profiles[0])
+        return {
+            "found": True,
+            "profile_name": str(selected_profile.get("profile_name") or ""),
+            "can_read": bool(selected_profile.get("can_read")),
+            "can_write": bool(selected_profile.get("can_write")),
+            "profile_path": str(selected_profile.get("profile_path") or ""),
+            "profiles": profiles,
+        }
+
+    return {
+        "found": False,
+        "profile_name": "",
+        "can_read": False,
+        "can_write": False,
+        "profile_path": "",
+        "profiles": [],
+    }
 
 
 def parse_trc_content(content: str) -> list[TrcSegment]:
@@ -1286,6 +1460,7 @@ class CodingPanel(QWidget):
     def __init__(self, db: Database | None = None, parent=None):
         super().__init__(parent)
         self._db = db
+        self._settings = QSettings("BimmerDaten", "BimmerDaten")
         self._paths = self._load_paths()
         self._translator = TrcTranslator(self._paths.translations_path)
         self._segments: list[TrcSegment] = []
@@ -1308,8 +1483,16 @@ class CodingPanel(QWidget):
         self._detect_worker: ModuleDetectWorker | None = None
         self._filter_text = ""
         self._column_min_widths: dict[int, int] = {}
+        self._ncs_profile_status: dict = {
+            "found": False,
+            "profile_name": "",
+            "can_read": False,
+            "can_write": False,
+            "profile_path": "",
+        }
         self._setup_ui()
         self._refresh_warning_state()
+        self._refresh_ncs_profile_status(initial=True)
         self.reload_model_tree()
 
     def _setup_ui(self):
@@ -1376,6 +1559,33 @@ class CodingPanel(QWidget):
         right_layout = QVBoxLayout(right_box)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(4)
+
+        self.profile_status_frame = QFrame()
+        self.profile_status_frame.setFrameShape(QFrame.Shape.Panel)
+        self.profile_status_frame.setFrameShadow(QFrame.Shadow.Raised)
+        self.profile_status_frame.setStyleSheet("background-color: #FF8C00; color: #000000; border: 1px solid #808080;")
+        profile_status_layout = QHBoxLayout(self.profile_status_frame)
+        profile_status_layout.setContentsMargins(6, 4, 6, 4)
+        profile_status_layout.setSpacing(8)
+
+        self.profile_status_label = QTextBrowser()
+        self.profile_status_label.setFrameShape(QFrame.Shape.NoFrame)
+        self.profile_status_label.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.profile_status_label.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.profile_status_label.setOpenExternalLinks(False)
+        self.profile_status_label.setOpenLinks(False)
+        self.profile_status_label.setReadOnly(True)
+        self.profile_status_label.setMaximumHeight(110)
+        self.profile_status_label.setStyleSheet(
+            "QTextBrowser { background: transparent; border: none; color: #000000; }"
+        )
+        profile_status_layout.addWidget(self.profile_status_label, 1)
+
+        self.profile_status_button = QPushButton("Szukaj...")
+        self.profile_status_button.clicked.connect(self._choose_ncs_profile_file)
+        profile_status_layout.addWidget(self.profile_status_button)
+
+        right_layout.addWidget(self.profile_status_frame)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
 
@@ -1453,6 +1663,125 @@ class CodingPanel(QWidget):
 
         layout.addWidget(left_box)
         layout.addWidget(right_box, 1)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._refresh_ncs_profile_status()
+
+    def _load_saved_profile_path(self) -> str:
+        return str(self._settings.value("coding/ncs_profile_path", "", type=str) or "").strip()
+
+    def _save_profile_path(self, profile_path: str) -> None:
+        self._settings.setValue("coding/ncs_profile_path", profile_path or "")
+
+    def _set_profile_status_ui(self, profile_info: dict):
+        found = bool(profile_info.get("found"))
+        profile_name = str(profile_info.get("profile_name") or "").strip() or "BRAK"
+        can_read = bool(profile_info.get("can_read"))
+        can_write = bool(profile_info.get("can_write"))
+        profiles = profile_info.get("profiles") or []
+
+        if not found:
+            self.profile_status_frame.setStyleSheet("background-color: #FF8C00; color: #000000; border: 1px solid #808080;")
+            self.profile_status_label.setHtml(
+                "<div style='color:#000000; font-weight:bold;'>⚠️ Nie znaleziono profilu NCS Expert</div>"
+            )
+            self.profile_status_button.setText("Szukaj...")
+            self.profile_status_button.setToolTip("Wybierz plik .PFL ręcznie")
+            return
+
+        total_profiles = len(profiles)
+        full_access_count = sum(1 for profile in profiles if bool(profile.get("can_write")))
+        read_only_count = sum(1 for profile in profiles if bool(profile.get("can_read")) and not bool(profile.get("can_write")))
+        blocked_count = max(total_profiles - full_access_count - read_only_count, 0)
+
+        lines = [
+            "<div style='margin-bottom:4px; font-weight:bold;'>"
+            f"Znaleziono {total_profiles} plik{'ów' if total_profiles != 1 else ''} .PFL"
+            "</div>",
+            "<div style='margin-bottom:6px;'>"
+            f"Pełny zapis: {full_access_count} | Tylko odczyt: {read_only_count} | Brak uprawnień: {blocked_count}"
+            "</div>",
+            "<div style='line-height:1.35;'>",
+        ]
+
+        for profile in profiles:
+            color = str(profile.get("color") or "#000000")
+            status_label = html_escape(str(profile.get("status_label") or ""))
+            profile_name_html = html_escape(str(profile.get("profile_name") or ""))
+            profile_path_html = html_escape(str(profile.get("profile_path") or ""))
+            is_selected = bool(profile.get("is_selected"))
+            prefix = "▶ " if is_selected else "• "
+            weight = "font-weight:bold;" if is_selected else ""
+            marker = " <span style='color:#404040;'>(aktywny)</span>" if is_selected else ""
+            lines.append(
+                "<div style='margin-bottom:2px;'>"
+                f"<span style='color:{color}; {weight}'>{prefix}{profile_name_html}</span>"
+                f" <span style='color:#404040;'>[{status_label}]</span>"
+                f"<br><span style='color:#606060;'>{profile_path_html}</span>{marker}"
+                "</div>"
+            )
+
+        lines.append("</div>")
+
+        if can_write:
+            self.profile_status_frame.setStyleSheet("background-color: #228B22; color: #FFFFFF; border: 1px solid #808080;")
+            self.profile_status_label.setStyleSheet("QTextBrowser { background: transparent; border: none; color: #FFFFFF; }")
+            self.profile_status_label.setHtml("".join(lines))
+        elif can_read:
+            self.profile_status_frame.setStyleSheet("background-color: #FFD700; color: #000000; border: 1px solid #808080;")
+            self.profile_status_label.setStyleSheet("QTextBrowser { background: transparent; border: none; color: #000000; }")
+            self.profile_status_label.setHtml("".join(lines))
+        else:
+            self.profile_status_frame.setStyleSheet("background-color: #FF8C00; color: #000000; border: 1px solid #808080;")
+            self.profile_status_label.setStyleSheet("QTextBrowser { background: transparent; border: none; color: #000000; }")
+            self.profile_status_label.setHtml("".join(lines))
+
+        self.profile_status_button.setText("Zmień...")
+        self.profile_status_button.setToolTip("Wybierz inny plik .PFL")
+
+    def _refresh_ncs_profile_status(self, initial: bool = False):
+        profile_path = self._load_saved_profile_path()
+        if initial and not profile_path:
+            profile_path = "C:\\NCSEXPER\\"
+
+        profile_info = check_ncs_profile(profile_path)
+        self._ncs_profile_status = profile_info
+        self._set_profile_status_ui(profile_info)
+
+    def _choose_ncs_profile_file(self):
+        start_path = self._ncs_profile_status.get("profile_path") or self._load_saved_profile_path() or "C:\\NCSEXPER\\"
+        start_dir = str(Path(start_path).parent if Path(start_path).suffix.lower() == ".pfl" else Path(start_path))
+        selected_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Wybierz profil NCS Expert",
+            start_dir,
+            "NCS Expert Profile (*.PFL *.pfl);;All Files (*)",
+        )
+        if not selected_path:
+            return
+
+        self._save_profile_path(selected_path)
+        self._ncs_profile_status = check_ncs_profile(selected_path)
+        self._set_profile_status_ui(self._ncs_profile_status)
+
+    def _warn_if_profile_blocks_write(self) -> bool:
+        if bool(self._ncs_profile_status.get("can_write")):
+            return True
+
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Ostrzeżenie NCS Expert")
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setText(
+            "⚠️ Aktywny profil NCS Expert nie pozwala na zapis.\n\n"
+            "Aby wgrać zmiany do modułu, załaduj profil z pełnym dostępem\n"
+            "(np. NCSDUMMY4.PFL lub EXPERTENMODE.PFL).\n"
+            "Czy mimo to wyeksportować plik .MAN?"
+        )
+        yes_button = dialog.addButton("Tak, eksportuj", QMessageBox.ButtonRole.AcceptRole)
+        cancel_button = dialog.addButton("Anuluj", QMessageBox.ButtonRole.RejectRole)
+        dialog.exec()
+        return dialog.clickedButton() == yes_button and cancel_button is not None
 
     def _load_paths(self) -> CodingPaths:
         config = _read_json_config()
@@ -2159,6 +2488,9 @@ class CodingPanel(QWidget):
             if not export_path.suffix:
                 export_path = export_path.with_suffix(extension)
             notes = confirm.notes()
+
+        if extension.upper() == ".MAN" and not self._warn_if_profile_blocks_write():
+            return
 
         self._sync_values_from_widgets()
         content_after = format_man_content(self._segments)
