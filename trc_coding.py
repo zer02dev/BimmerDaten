@@ -154,7 +154,7 @@ def _collect_pfl_profiles(base_path: Path) -> list[dict]:
         return profiles
 
     pfl_files = sorted(
-        [path for path in base_path.rglob("*") if path.is_file() and path.suffix.casefold() == ".pfl"],
+        [path for path in set(list(base_path.glob("*.pfl")) + list(base_path.glob("*.PFL"))) if path.is_file()],
         key=lambda path: str(path).casefold(),
     )
 
@@ -1568,20 +1568,15 @@ class CodingPanel(QWidget):
         profile_status_layout.setContentsMargins(6, 4, 6, 4)
         profile_status_layout.setSpacing(8)
 
-        self.profile_status_label = QTextBrowser()
-        self.profile_status_label.setFrameShape(QFrame.Shape.NoFrame)
-        self.profile_status_label.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.profile_status_label.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.profile_status_label.setOpenExternalLinks(False)
-        self.profile_status_label.setOpenLinks(False)
-        self.profile_status_label.setReadOnly(True)
-        self.profile_status_label.setMaximumHeight(110)
-        self.profile_status_label.setStyleSheet(
-            "QTextBrowser { background: transparent; border: none; color: #000000; }"
-        )
+        self.profile_status_label = QWidget()
+        self.profile_status_label_layout = QHBoxLayout(self.profile_status_label)
+        self.profile_status_label_layout.setContentsMargins(0, 0, 0, 0)
+        self.profile_status_label_layout.setSpacing(6)
+        self.profile_status_label_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.profile_status_label.setStyleSheet("background: transparent;")
         profile_status_layout.addWidget(self.profile_status_label, 1)
 
-        self.profile_status_button = QPushButton("Szukaj...")
+        self.profile_status_button = QPushButton("📁 Zmień folder")
         self.profile_status_button.clicked.connect(self._choose_ncs_profile_file)
         profile_status_layout.addWidget(self.profile_status_button)
 
@@ -1672,73 +1667,63 @@ class CodingPanel(QWidget):
         return str(self._settings.value("coding/ncs_profile_path", "", type=str) or "").strip()
 
     def _save_profile_path(self, profile_path: str) -> None:
-        self._settings.setValue("coding/ncs_profile_path", profile_path or "")
+        folder = str(Path(profile_path)) if Path(profile_path).is_dir() else str(Path(profile_path).parent)
+        self._settings.setValue("coding/ncs_profile_path", folder or "")
 
     def _set_profile_status_ui(self, profile_info: dict):
         found = bool(profile_info.get("found"))
-        profile_name = str(profile_info.get("profile_name") or "").strip() or "BRAK"
-        can_read = bool(profile_info.get("can_read"))
-        can_write = bool(profile_info.get("can_write"))
         profiles = profile_info.get("profiles") or []
 
+        while self.profile_status_label_layout.count():
+            item = self.profile_status_label_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
         if not found:
-            self.profile_status_frame.setStyleSheet("background-color: #FF8C00; color: #000000; border: 1px solid #808080;")
-            self.profile_status_label.setHtml(
-                "<div style='color:#000000; font-weight:bold;'>⚠️ Nie znaleziono profilu NCS Expert</div>"
-            )
-            self.profile_status_button.setText("Szukaj...")
-            self.profile_status_button.setToolTip("Wybierz plik .PFL ręcznie")
+            self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
+            no_profiles_label = QLabel("Brak profili .PFL w katalogu")
+            no_profiles_label.setStyleSheet("color: #606060; font-weight: bold; background: transparent;")
+            no_profiles_label.setWordWrap(False)
+            self.profile_status_label_layout.addWidget(no_profiles_label)
+            self.profile_status_frame.setFixedHeight(no_profiles_label.sizeHint().height() + 10)
             return
 
-        total_profiles = len(profiles)
-        full_access_count = sum(1 for profile in profiles if bool(profile.get("can_write")))
-        read_only_count = sum(1 for profile in profiles if bool(profile.get("can_read")) and not bool(profile.get("can_write")))
-        blocked_count = max(total_profiles - full_access_count - read_only_count, 0)
-
-        lines = [
-            "<div style='margin-bottom:4px; font-weight:bold;'>"
-            f"Znaleziono {total_profiles} plik{'ów' if total_profiles != 1 else ''} .PFL"
-            "</div>",
-            "<div style='margin-bottom:6px;'>"
-            f"Pełny zapis: {full_access_count} | Tylko odczyt: {read_only_count} | Brak uprawnień: {blocked_count}"
-            "</div>",
-            "<div style='line-height:1.35;'>",
-        ]
-
+        chip_widgets = []
         for profile in profiles:
-            color = str(profile.get("color") or "#000000")
-            status_label = html_escape(str(profile.get("status_label") or ""))
-            profile_name_html = html_escape(str(profile.get("profile_name") or ""))
-            profile_path_html = html_escape(str(profile.get("profile_path") or ""))
-            is_selected = bool(profile.get("is_selected"))
-            prefix = "▶ " if is_selected else "• "
-            weight = "font-weight:bold;" if is_selected else ""
-            marker = " <span style='color:#404040;'>(aktywny)</span>" if is_selected else ""
-            lines.append(
-                "<div style='margin-bottom:2px;'>"
-                f"<span style='color:{color}; {weight}'>{prefix}{profile_name_html}</span>"
-                f" <span style='color:#404040;'>[{status_label}]</span>"
-                f"<br><span style='color:#606060;'>{profile_path_html}</span>{marker}"
-                "</div>"
+            profile_name = str(profile.get("profile_name") or "").strip() or "BRAK"
+            can_write = bool(profile.get("can_write"))
+            color = "#1F8A1F" if can_write else "#C00000"
+            chip = QLabel(profile_name)
+            chip.setStyleSheet(
+                "QLabel {"
+                f"background-color: {color};"
+                "color: #FFFFFF;"
+                "border: 1px solid #808080;"
+                "border-radius: 3px;"
+                "padding: 1px 8px;"
+                "font-weight: bold;"
+                "background-clip: padding;"
+                "}"
             )
+            chip.setWordWrap(False)
+            chip.setToolTip(str(profile.get("profile_path") or ""))
+            chip_widgets.append(chip)
+            self.profile_status_label_layout.addWidget(chip)
 
-        lines.append("</div>")
+        if not chip_widgets:
+            self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
+            fallback_label = QLabel("Brak profili .PFL w katalogu")
+            fallback_label.setStyleSheet("color: #606060; font-weight: bold; background: transparent;")
+            fallback_label.setWordWrap(False)
+            self.profile_status_label_layout.addWidget(fallback_label)
+            self.profile_status_frame.setFixedHeight(fallback_label.sizeHint().height() + 10)
+            return
 
-        if can_write:
-            self.profile_status_frame.setStyleSheet("background-color: #228B22; color: #FFFFFF; border: 1px solid #808080;")
-            self.profile_status_label.setStyleSheet("QTextBrowser { background: transparent; border: none; color: #FFFFFF; }")
-            self.profile_status_label.setHtml("".join(lines))
-        elif can_read:
-            self.profile_status_frame.setStyleSheet("background-color: #FFD700; color: #000000; border: 1px solid #808080;")
-            self.profile_status_label.setStyleSheet("QTextBrowser { background: transparent; border: none; color: #000000; }")
-            self.profile_status_label.setHtml("".join(lines))
-        else:
-            self.profile_status_frame.setStyleSheet("background-color: #FF8C00; color: #000000; border: 1px solid #808080;")
-            self.profile_status_label.setStyleSheet("QTextBrowser { background: transparent; border: none; color: #000000; }")
-            self.profile_status_label.setHtml("".join(lines))
-
-        self.profile_status_button.setText("Zmień...")
-        self.profile_status_button.setToolTip("Wybierz inny plik .PFL")
+        self.profile_status_label_layout.addStretch(1)
+        self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
+        tallest_chip = max(chip.sizeHint().height() for chip in chip_widgets)
+        self.profile_status_frame.setFixedHeight(tallest_chip + 10)
 
     def _refresh_ncs_profile_status(self, initial: bool = False):
         profile_path = self._load_saved_profile_path()
@@ -1750,19 +1735,21 @@ class CodingPanel(QWidget):
         self._set_profile_status_ui(profile_info)
 
     def _choose_ncs_profile_file(self):
-        start_path = self._ncs_profile_status.get("profile_path") or self._load_saved_profile_path() or "C:\\NCSEXPER\\"
-        start_dir = str(Path(start_path).parent if Path(start_path).suffix.lower() == ".pfl" else Path(start_path))
-        selected_path, _ = QFileDialog.getOpenFileName(
+        saved_folder = self._load_saved_profile_path()
+        start_dir = saved_folder or "C:\\NCSEXPER\\"
+        start_dir = str(Path(start_dir)) if Path(start_dir).is_dir() else str(Path(start_dir).parent)
+        
+        selected_folder = QFileDialog.getExistingDirectory(
             self,
-            "Wybierz profil NCS Expert",
+            "Wybierz folder z profilami NCS Expert",
             start_dir,
-            "NCS Expert Profile (*.PFL *.pfl);;All Files (*)",
+            QFileDialog.Option.ShowDirsOnly,
         )
-        if not selected_path:
+        if not selected_folder:
             return
 
-        self._save_profile_path(selected_path)
-        self._ncs_profile_status = check_ncs_profile(selected_path)
+        self._save_profile_path(selected_folder)
+        self._ncs_profile_status = check_ncs_profile(selected_folder)
         self._set_profile_status_ui(self._ncs_profile_status)
 
     def _warn_if_profile_blocks_write(self) -> bool:
@@ -2488,9 +2475,6 @@ class CodingPanel(QWidget):
             if not export_path.suffix:
                 export_path = export_path.with_suffix(extension)
             notes = confirm.notes()
-
-        if extension.upper() == ".MAN" and not self._warn_if_profile_blocks_write():
-            return
 
         self._sync_values_from_widgets()
         content_after = format_man_content(self._segments)
