@@ -1,4 +1,5 @@
 __pycache__/
 *.pyc
 test.py
-*.cpython
+.cpython-*.pyc
+__pycache__/database.cpython-314.pyc

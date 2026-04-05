@@ -120,6 +120,19 @@ def format_trc_content(segments: list[TrcSegment]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def format_man_content(segments: list[TrcSegment]) -> str:
+    lines: list[str] = []
+    for segment in segments:
+        if segment.kind == "option":
+            lines.append(segment.option)
+            lines.append(f"\t{segment.value}")
+        else:
+            lines.extend(segment.raw_lines or [""])
+    if not lines:
+        return ""
+    return "\r\n".join(lines) + "\r\n"
+
+
 def build_change_list(segments: list[TrcSegment]) -> list[dict]:
     changes: list[dict] = []
     for segment in segments:
@@ -443,8 +456,9 @@ class CodingPanel(QWidget):
         self._row_editable: dict[int, bool] = {}
         self._module_options: set[str] = set()
         self._module_options_cache: dict[tuple[str, str], set[str]] = {}
-        self._module_params_by_option: dict[str, list[dict]] = {}
+        self._module_option_info: dict[str, dict] = {}
         self._module_loaded = False
+        self._table_entries: list[dict] = []
         self._available_models: list[str] = []
         self._modules_by_model: dict[str, list[str]] = {}
         self._current_model = ""
@@ -621,7 +635,7 @@ class CodingPanel(QWidget):
         self._current_module = ""
         self._current_module_file = ""
         self._module_options = set()
-        self._module_params_by_option = {}
+        self._module_option_info = {}
         self._module_loaded = False
         self._trc_loaded = False
         self.load_trc_button.setEnabled(False)
@@ -670,7 +684,7 @@ class CodingPanel(QWidget):
         self._current_module = ""
         self._current_module_file = ""
         self._module_options = set()
-        self._module_params_by_option = {}
+        self._module_option_info = {}
         self._module_loaded = False
         self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
         if self._segments:
@@ -698,7 +712,7 @@ class CodingPanel(QWidget):
             self._current_module = ""
             self._current_module_file = ""
             self._module_options = set()
-            self._module_params_by_option = {}
+            self._module_option_info = {}
             self._module_loaded = False
             if self._segments:
                 self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
@@ -723,16 +737,19 @@ class CodingPanel(QWidget):
             self._module_options_cache[cache_key] = option_names
             self._module_options = option_names
 
-        # Always refresh params map from parsed module so editors can show all allowed values.
-        self._module_params_by_option = {}
+        # Always refresh option info from parsed module so editors can show allowed values and groups.
+        self._module_option_info = {}
         if not parsed_options:
             parsed_options = load_module(self._paths.daten_path, self._current_model, module_file)
         for option in parsed_options:
             option_name = str(option.get("name", "")).strip().upper()
             params = option.get("params") or []
             if option_name:
-                self._module_params_by_option[option_name] = list(params)
-        self._module_loaded = bool(self._module_params_by_option)
+                self._module_option_info[option_name] = {
+                    "params": list(params),
+                    "group": str(option.get("group", "")).strip(),
+                }
+        self._module_loaded = bool(self._module_option_info)
 
         if self._segments:
             self._apply_module_filter_to_table()
@@ -791,6 +808,7 @@ class CodingPanel(QWidget):
             self._segments = []
             self._option_rows = []
             self._row_editable = {}
+            self._table_entries = []
             self._current_trc_content = ""
             self._baseline_content = ""
             self._trc_loaded = False
@@ -840,14 +858,33 @@ class CodingPanel(QWidget):
             )
 
     def _render_table(self):
-        self.trc_table.setRowCount(len(self._option_rows))
+        self._table_entries = self._build_table_entries()
+        self.trc_table.setRowCount(len(self._table_entries))
         self.trc_table.clearContents()
+        self.trc_table.clearSpans()
 
-        for row_index, segment_index in enumerate(self._option_rows):
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") == "group":
+                group_name = entry.get("group", "")
+                header_text = f"── {group_name} ──"
+                header_item = QTableWidgetItem(header_text)
+                header_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                header_item.setBackground(QColor("#D4D0C8"))
+                header_item.setForeground(QColor("#000000"))
+                font = header_item.font()
+                font.setBold(True)
+                header_item.setFont(font)
+                self.trc_table.setItem(row_index, 0, header_item)
+                self.trc_table.setSpan(row_index, 0, 1, self.trc_table.columnCount())
+                self.trc_table.setRowHeight(row_index, max(self.trc_table.rowHeight(row_index), 22))
+                continue
+
+            segment_index = entry["segment_index"]
+            option_index = entry["option_index"]
             segment = self._segments[segment_index]
-            editable = self._row_editable.get(row_index, True)
+            editable = self._row_editable.get(option_index, True)
 
-            number_item = QTableWidgetItem(str(row_index + 1))
+            number_item = QTableWidgetItem(str(option_index + 1))
             number_item.setFlags(number_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
             option_item = QTableWidgetItem(segment.option)
@@ -855,16 +892,28 @@ class CodingPanel(QWidget):
             translation_item = QTableWidgetItem(self._translator.translate(segment.option))
             translation_item.setFlags(translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-            option_name_upper = segment.option.strip().upper()
-            params = self._module_params_by_option.get(option_name_upper, []) if self._module_loaded else []
+            option_name_raw = segment.option.strip()
+            option_name_upper = option_name_raw.upper()
+            params = []
+            if self._module_loaded:
+                option_info = self._module_option_info.get(option_name_upper, {})
+                params = option_info.get("params", []) or []
 
-            if editable and params:
-                value_editor = self._build_value_combo(row_index, segment.value, params)
+            if self._module_loaded:
+                if editable and params:
+                    value_editor = self._build_value_combo(row_index, segment.value, params)
+                    self.trc_table.setCellWidget(row_index, 3, value_editor)
+                else:
+                    value_item = QTableWidgetItem(segment.value)
+                    value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    value_item.setForeground(QColor("#888888"))
+                    self.trc_table.setItem(row_index, 3, value_item)
             else:
                 value_editor = QLineEdit(segment.value)
                 value_editor.textChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text))
                 value_editor.setMinimumWidth(180)
                 value_editor.setReadOnly(not editable)
+                self.trc_table.setCellWidget(row_index, 3, value_editor)
 
             value_translation_item = QTableWidgetItem(self._translator.translate(segment.value))
             value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -875,7 +924,6 @@ class CodingPanel(QWidget):
             self.trc_table.setItem(row_index, 0, number_item)
             self.trc_table.setItem(row_index, 1, option_item)
             self.trc_table.setItem(row_index, 2, translation_item)
-            self.trc_table.setCellWidget(row_index, 3, value_editor)
             self.trc_table.setItem(row_index, 4, value_translation_item)
             self.trc_table.setItem(row_index, 5, changed_item)
             self._apply_row_style(row_index)
@@ -883,13 +931,42 @@ class CodingPanel(QWidget):
         self.trc_table.resizeColumnsToContents()
         self._update_change_count()
 
+    def _build_table_entries(self) -> list[dict]:
+        entries: list[dict] = []
+        last_group = ""
+        for option_index, segment_index in enumerate(self._option_rows):
+            segment = self._segments[segment_index]
+            option_name = segment.option.strip().upper()
+            group_name = ""
+            if self._module_loaded:
+                option_info = self._module_option_info.get(option_name, {})
+                group_name = str(option_info.get("group", "")).strip()
+
+            if group_name and group_name != last_group:
+                entries.append({"kind": "group", "group": group_name})
+                last_group = group_name
+
+            entries.append(
+                {
+                    "kind": "option",
+                    "segment_index": segment_index,
+                    "option_index": option_index,
+                    "group": group_name,
+                }
+            )
+        return entries
+
     def _on_value_changed(self, row_index: int, text: str):
-        if row_index < 0 or row_index >= len(self._option_rows):
+        if row_index < 0 or row_index >= len(self._table_entries):
             return
-        if not self._row_editable.get(row_index, True):
+        entry = self._table_entries[row_index]
+        if entry.get("kind") != "option":
+            return
+        option_index = entry["option_index"]
+        if not self._row_editable.get(option_index, True):
             return
 
-        segment_index = self._option_rows[row_index]
+        segment_index = entry["segment_index"]
         segment = self._segments[segment_index]
         segment.value = text
 
@@ -907,7 +984,7 @@ class CodingPanel(QWidget):
 
         names = [str(param.get("name", "")).strip() for param in params if str(param.get("name", "")).strip()]
         if current_value not in names:
-            combo.addItem(f"⚠️ {current_value}", current_value)
+            combo.addItem(f"⚠️ {current_value}")
             combo.setItemData(0, f"{current_value} (unknown)", Qt.ItemDataRole.ToolTipRole)
 
         for param in params:
@@ -915,36 +992,28 @@ class CodingPanel(QWidget):
             if not name:
                 continue
             data_value = int(param.get("data", 0)) & 0xFF
-            combo.addItem(name, name)
+            combo.addItem(name)
             combo.setItemData(combo.count() - 1, f"{name} (0x{data_value:02X})", Qt.ItemDataRole.ToolTipRole)
 
-        target_index = combo.findData(current_value)
-        if target_index < 0:
-            target_index = combo.findText(current_value)
+        target_index = combo.findText(current_value)
         if target_index >= 0:
             combo.setCurrentIndex(target_index)
 
-        combo.currentIndexChanged.connect(lambda idx, row=row_index, widget=combo: self._on_combo_value_changed(row, widget, idx))
+        combo.currentTextChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text.replace("⚠️ ", "")))
         return combo
 
-    def _on_combo_value_changed(self, row_index: int, combo: QComboBox, index: int):
-        if row_index < 0 or row_index >= len(self._option_rows):
-            return
-        if index < 0:
-            return
-        value = combo.currentText()
-        if value.startswith("⚠️ "):
-            value = value[3:].strip()
-        self._on_value_changed(row_index, value)
-
     def _apply_row_style(self, row_index: int):
-        if row_index < 0 or row_index >= len(self._option_rows):
+        if row_index < 0 or row_index >= len(self._table_entries):
             return
 
-        segment_index = self._option_rows[row_index]
+        entry = self._table_entries[row_index]
+        if entry.get("kind") != "option":
+            return
+
+        segment_index = entry["segment_index"]
         segment = self._segments[segment_index]
         changed = segment.value != segment.original_value
-        editable = self._row_editable.get(row_index, True)
+        editable = self._row_editable.get(entry["option_index"], True)
 
         for column in range(self.trc_table.columnCount()):
             item = self.trc_table.item(row_index, column)
@@ -982,14 +1051,19 @@ class CodingPanel(QWidget):
     def _update_change_count(self):
         self._sync_values_from_widgets()
         changed_count = 0
-        for segment_index in self._option_rows:
-            segment = self._segments[segment_index]
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") != "option":
+                continue
+            segment = self._segments[entry["segment_index"]]
             if segment.value != segment.original_value:
                 changed_count += 1
         self.change_count_label.setText(f"Zmieniono: {changed_count} opcji")
 
     def _sync_values_from_widgets(self):
-        for row_index, segment_index in enumerate(self._option_rows):
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") != "option":
+                continue
+            segment_index = entry["segment_index"]
             widget = self.trc_table.cellWidget(row_index, 3)
             if isinstance(widget, QLineEdit):
                 self._segments[segment_index].value = widget.text()
@@ -998,6 +1072,10 @@ class CodingPanel(QWidget):
                 if value.startswith("⚠️ "):
                     value = value[3:].strip()
                 self._segments[segment_index].value = value
+            else:
+                value_item = self.trc_table.item(row_index, 3)
+                if value_item:
+                    self._segments[segment_index].value = value_item.text()
 
     def _current_content(self) -> str:
         self._sync_values_from_widgets()
@@ -1013,31 +1091,40 @@ class CodingPanel(QWidget):
             QMessageBox.information(self, "Eksport", "Brak zmian do eksportu.")
             return
 
-        confirm = ExportConfirmDialog(changes, self)
-        if confirm.exec() != QDialog.DialogCode.Accepted:
-            return
+        if extension.upper() == ".MAN":
+            confirm = ExportConfirmDialog(changes, self)
+            if confirm.exec() != QDialog.DialogCode.Accepted:
+                return
 
-        default_directory = Path(self._paths.trc_path).parent if Path(self._paths.trc_path).exists() else Path.home()
-        suggested_name = DEFAULT_MAND_PATH.name if extension.upper() == ".MAN" else DEFAULT_TRC_PATH.name
-        suggested_path = default_directory / suggested_name
-        file_filter = "NCS Expert Files (*.MAN *.TRC);;All Files (*)"
-        selected_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Eksportuj zmiany",
-            str(suggested_path),
-            file_filter,
-        )
-        if not selected_path:
-            return
+            export_path = DEFAULT_MAND_PATH
+            notes = confirm.notes()
+        else:
+            confirm = ExportConfirmDialog(changes, self)
+            if confirm.exec() != QDialog.DialogCode.Accepted:
+                return
 
-        export_path = Path(selected_path)
-        if not export_path.suffix:
-            export_path = export_path.with_suffix(extension)
+            default_directory = Path(self._paths.trc_path).parent if Path(self._paths.trc_path).exists() else Path.home()
+            suggested_path = default_directory / DEFAULT_TRC_PATH.name
+            file_filter = "NCS Expert Files (*.MAN *.TRC);;All Files (*)"
+            selected_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Eksportuj zmiany",
+                str(suggested_path),
+                file_filter,
+            )
+            if not selected_path:
+                return
 
-        content_after = self._current_content()
+            export_path = Path(selected_path)
+            if not export_path.suffix:
+                export_path = export_path.with_suffix(extension)
+            notes = confirm.notes()
+
+        self._sync_values_from_widgets()
+        content_after = format_man_content(self._segments)
         try:
             export_path.parent.mkdir(parents=True, exist_ok=True)
-            export_path.write_text(content_after, encoding="utf-8", newline="\n")
+            export_path.write_text(content_after, encoding="utf-8", newline="")
         except Exception as exc:
             QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać pliku:\n{exc}")
             return
@@ -1051,7 +1138,7 @@ class CodingPanel(QWidget):
                     self._baseline_content,
                     content_after,
                     changes,
-                    notes=confirm.notes(),
+                    notes=notes,
                 )
             except Exception:
                 pass
