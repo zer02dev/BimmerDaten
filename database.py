@@ -83,6 +83,10 @@ class Database:
                 content_after   TEXT NOT NULL,
                 notes          TEXT NOT NULL DEFAULT '',
                 changed_options TEXT NOT NULL,
+                vin            TEXT,
+                teilenummer    TEXT,
+                production_date TEXT,
+                sa_codes       TEXT,
                 exported_at    TEXT DEFAULT (datetime('now'))
             );
             """
@@ -92,6 +96,20 @@ class Database:
         columns = {row[1] for row in rows}
         if "notes" not in columns:
             self.conn.execute("ALTER TABLE trc_history ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+        if "vin" not in columns:
+            self.conn.execute("ALTER TABLE trc_history ADD COLUMN vin TEXT")
+        if "teilenummer" not in columns:
+            self.conn.execute("ALTER TABLE trc_history ADD COLUMN teilenummer TEXT")
+        if "codierdatum" in columns:
+            try:
+                self.conn.execute("ALTER TABLE trc_history DROP COLUMN codierdatum")
+            except sqlite3.Error:
+                # Older SQLite versions may not support DROP COLUMN.
+                pass
+        if "production_date" not in columns:
+            self.conn.execute("ALTER TABLE trc_history ADD COLUMN production_date TEXT")
+        if "sa_codes" not in columns:
+            self.conn.execute("ALTER TABLE trc_history ADD COLUMN sa_codes TEXT")
 
     def save_trc_history(
         self,
@@ -102,14 +120,20 @@ class Database:
         content_after: str,
         changed_options: list[dict],
         notes: str = "",
+        vin: str = "",
+        teilenummer: str = "",
+        production_date: str = "",
+        sa_codes: list[str] | None = None,
     ) -> int:
         payload = json.dumps(changed_options, ensure_ascii=False)
+        sa_codes_payload = json.dumps(sa_codes or [], ensure_ascii=False)
         cursor = self.conn.execute(
             """
             INSERT INTO trc_history (
                 model, module, module_file,
-                content_before, content_after, notes, changed_options
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                content_before, content_after, notes, changed_options,
+                vin, teilenummer, production_date, sa_codes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 (model or "").upper(),
@@ -119,6 +143,10 @@ class Database:
                 content_after or "",
                 notes or "",
                 payload,
+                vin or "",
+                teilenummer or "",
+                production_date or "",
+                sa_codes_payload,
             ),
         )
         self.conn.execute(
@@ -129,7 +157,7 @@ class Database:
                 FROM trc_history
                 WHERE model = ? AND module = ?
                 ORDER BY id DESC
-                LIMIT 10
+                LIMIT 35
             )
             """,
             ((model or "").upper(), (module or "").upper(), (model or "").upper(), (module or "").upper()),
@@ -143,7 +171,8 @@ class Database:
                 """
                 SELECT id, model, module, module_file,
                       content_before, content_after, notes,
-                       changed_options, exported_at
+                        changed_options, vin, teilenummer,
+                      production_date, sa_codes, exported_at
                 FROM trc_history
                 WHERE model = ? AND module = ?
                 ORDER BY id DESC
@@ -160,6 +189,10 @@ class Database:
                 changed_options = json.loads(row["changed_options"] or "[]")
             except Exception:
                 changed_options = []
+            try:
+                sa_codes = json.loads(row["sa_codes"] or "[]")
+            except Exception:
+                sa_codes = []
             result.append(
                 {
                     "id": row["id"],
@@ -170,6 +203,10 @@ class Database:
                     "content_after": row["content_after"],
                     "notes": row["notes"] if row["notes"] else "",
                     "changed_options": changed_options,
+                    "vin": row["vin"] if row["vin"] else "",
+                    "teilenummer": row["teilenummer"] if row["teilenummer"] else "",
+                    "production_date": row["production_date"] if row["production_date"] else "",
+                    "sa_codes": sa_codes,
                     "exported_at": row["exported_at"],
                 }
             )

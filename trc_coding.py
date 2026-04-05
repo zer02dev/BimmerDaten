@@ -6,11 +6,14 @@ Panel kodowania NCS Expert oraz narzędzia do pracy z plikami TRC.
 from __future__ import annotations
 
 import json
+import re
+from html import escape as html_escape
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QPageSize
+from PyQt6.QtGui import QTextDocument
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -36,6 +39,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QHeaderView,
 )
+from PyQt6.QtPrintSupport import QPrinter
 
 from database import Database
 from daten_parser import detect_module_from_trc, load_module, parse_trc as parse_trc_file
@@ -46,6 +50,7 @@ DEFAULT_TRC_PATH = Path(r"C:\NCSEXPER\WORK\FSW_PSW.TRC")
 DEFAULT_DATEN_PATH = Path(r"C:\NCSEXPER\DATEN")
 DEFAULT_TRANSLATIONS_PATH = Path(r"C:\NCS Dummy\Translations.csv")
 DEFAULT_MAND_PATH = Path(r"C:\NCSEXPER\WORK\FSW_PSW.MAN")
+DEFAULT_WORK_PATH = Path(r"C:\NCSEXPER\WORK")
 CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
 
 
@@ -107,6 +112,64 @@ def parse_trc_content(content: str) -> list[TrcSegment]:
         index += 1
 
     return segments
+
+
+def parse_sysdaten(work_folder: str) -> dict:
+    base_folder = Path((work_folder or "").strip() or str(DEFAULT_WORK_PATH))
+    file_path = base_folder / "SYSDATEN.TRC"
+    if not file_path.exists():
+        return {}
+
+    wanted_keys = [
+        "FAHRGESTELL_NR",
+        "TEILENUMMER",
+        "CODIERDATUM",
+        "HAENDLER_NR",
+        "CHECKSUM",
+        "LACK_CODE",
+        "POLSTER_CODE",
+    ]
+    parsed: dict[str, str] = {key: "" for key in wanted_keys}
+    wanted_set = set(wanted_keys)
+    for segment in parse_trc_content(read_text_file(file_path)):
+        if segment.kind != "option":
+            continue
+        key = segment.option.strip().upper()
+        if key in wanted_set:
+            parsed[key] = segment.value.strip()
+    return parsed
+
+
+def parse_fa_trc(work_folder: str) -> dict:
+    base_folder = Path((work_folder or "").strip() or str(DEFAULT_WORK_PATH))
+    file_path = base_folder / "fa.trc"
+    if not file_path.exists():
+        return {}
+
+    content = read_text_file(file_path).strip()
+    if not content:
+        return {}
+
+    first_line = content.splitlines()[0].strip()
+    model = first_line.split("_", 1)[0].strip() if "_" in first_line else ""
+
+    production_date = ""
+    hash_pos = first_line.find("#")
+    if hash_pos >= 0:
+        and_pos = first_line.find("&", hash_pos + 1)
+        if and_pos > hash_pos:
+            production_date = first_line[hash_pos + 1:and_pos].strip()
+        else:
+            production_date = first_line[hash_pos + 1:].strip()
+
+    sa_codes = re.findall(r"\$([0-9A-Fa-f]+)", first_line)
+    sa_codes = [code.upper() for code in sa_codes]
+
+    return {
+        "model": model,
+        "production_date": production_date,
+        "sa_codes": sa_codes,
+    }
 
 
 def format_trc_content(segments: list[TrcSegment]) -> str:
@@ -318,17 +381,54 @@ class ExportConfirmDialog(QDialog):
 
 
 class HistoryCompareDialog(QDialog):
-    def __init__(self, versions: list[dict], parent=None):
+    def __init__(self, versions: list[dict], history_rows: list[dict] | None = None, current_vin: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Historia i porównanie")
         self.setModal(True)
-        self._versions = versions
+        self._all_versions = versions
+        self._all_history_rows = history_rows or []
+        self._history_rows = list(self._all_history_rows)
+        self._current_vin = (current_vin or "").strip().upper()
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
+
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Filtr historii:"))
+        self.vin_filter_mode = QComboBox()
+        self.vin_filter_mode.addItem("Wszystkie VIN", "all")
+        self.vin_filter_mode.addItem("Tylko aktualny VIN", "current")
+        self.vin_filter_mode.addItem("Wybrany VIN", "selected")
+        filter_row.addWidget(self.vin_filter_mode)
+
+        filter_row.addWidget(QLabel("VIN:"))
+        self.vin_filter_combo = QComboBox()
+        self.vin_filter_combo.setMinimumWidth(220)
+        filter_row.addWidget(self.vin_filter_combo, 1)
+        layout.addLayout(filter_row)
+
+        self.vin_filter_mode.currentIndexChanged.connect(self._apply_history_filters)
+        self.vin_filter_combo.currentIndexChanged.connect(self._apply_history_filters)
+
+        self.history_table = QTableWidget()
+        self.history_table.setColumnCount(6)
+        self.history_table.setHorizontalHeaderLabels([
+            "VIN",
+            "Moduł",
+            "Nr części",
+            "Data prod.",
+            "Zmiany",
+            "Data eksportu",
+        ])
+        self.history_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.history_table.horizontalHeader().setStretchLastSection(True)
+        self._fill_history_table(self._history_rows)
+        layout.addWidget(self.history_table)
 
         selectors = QHBoxLayout()
         selectors.addWidget(QLabel("Wersja A"))
@@ -339,22 +439,19 @@ class HistoryCompareDialog(QDialog):
         selectors.addWidget(self.version_b, 1)
         layout.addLayout(selectors)
 
-        for version in self._versions:
-            label = version.get("label", "Bez nazwy")
-            self.version_a.addItem(label, version)
-            self.version_b.addItem(label, version)
-
-        if self.version_a.count() > 0:
-            self.version_a.setCurrentIndex(0)
-        if self.version_b.count() > 1:
-            self.version_b.setCurrentIndex(1)
+        self._populate_vin_values()
+        self._refresh_version_combos(self._all_versions)
+        self._apply_history_filters()
 
         action_row = QHBoxLayout()
         self.compare_button = QPushButton("Porównaj")
         self.only_diffs = QCheckBox("Pokaż tylko różnice")
         self.only_diffs.setChecked(True)
+        self.export_history_button = QPushButton("Eksportuj zapisane zmiany")
         self.compare_button.clicked.connect(self._compare)
+        self.export_history_button.clicked.connect(self._export_selected_history_entry)
         action_row.addWidget(self.compare_button)
+        action_row.addWidget(self.export_history_button)
         action_row.addWidget(self.only_diffs)
         action_row.addStretch()
         layout.addLayout(action_row)
@@ -371,6 +468,286 @@ class HistoryCompareDialog(QDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
+
+    def _fill_history_table(self, rows: list[dict]):
+        self.history_table.setRowCount(len(rows))
+        for row_index, row in enumerate(rows):
+            vin_item = QTableWidgetItem(row.get("vin", ""))
+            vin_item.setData(Qt.ItemDataRole.UserRole, row)
+            module_item = QTableWidgetItem(row.get("module", ""))
+            teilenummer_item = QTableWidgetItem(row.get("teilenummer", ""))
+            production_item = QTableWidgetItem(row.get("production_date_display", ""))
+            changes_item = QTableWidgetItem(row.get("changes_text", ""))
+            exported_item = QTableWidgetItem(row.get("exported_at", ""))
+
+            self.history_table.setItem(row_index, 0, vin_item)
+            self.history_table.setItem(row_index, 1, module_item)
+            self.history_table.setItem(row_index, 2, teilenummer_item)
+            self.history_table.setItem(row_index, 3, production_item)
+            self.history_table.setItem(row_index, 4, changes_item)
+            self.history_table.setItem(row_index, 5, exported_item)
+
+    def _selected_history_entry(self) -> dict | None:
+        row_index = self.history_table.currentRow()
+        if row_index < 0:
+            row_index = 0
+        if row_index < 0 or row_index >= self.history_table.rowCount():
+            return None
+
+        item = self.history_table.item(row_index, 0)
+        if not item:
+            return None
+        entry = item.data(Qt.ItemDataRole.UserRole)
+        return entry if isinstance(entry, dict) else None
+
+    def _safe_export_component(self, value: str) -> str:
+        text = re.sub(r"[<>:\\/*?\"|]", "_", (value or "").strip())
+        text = re.sub(r"\s+", " ", text).strip()
+        return text or "UNKNOWN"
+
+    def _build_export_folder_name(self, row: dict) -> str:
+        model = self._safe_export_component(str(row.get("model") or row.get("module") or "MODEL"))
+        vin = self._safe_export_component(str(row.get("vin") or "VIN"))
+        export_date = str(row.get("exported_at") or "").strip()
+        if export_date:
+            export_date = export_date.split(" ", 1)[0]
+        export_date = self._safe_export_component(export_date or "DATE")
+        return f"{model} - {vin} - {export_date}"
+
+    def _normalize_crlf(self, content: str) -> str:
+        text = (content or "").replace("\r\n", "\n").replace("\r", "\n")
+        return text.replace("\n", "\r\n")
+
+    def _pdf_html_for_entry(self, row: dict, before_content: str, after_content: str) -> str:
+        changes = row.get("changed_options") or []
+        change_rows = []
+        for change in changes if isinstance(changes, list) else []:
+            option = html_escape(str(change.get("option", "")))
+            value_from = html_escape(str(change.get("from", "")))
+            value_to = html_escape(str(change.get("to", "")))
+            change_rows.append(f"<tr><td>{option}</td><td>{value_from}</td><td>{value_to}</td></tr>")
+
+        metadata_rows = [
+            ("VIN", row.get("vin", "")),
+            ("Model", row.get("model", "")),
+            ("Moduł", row.get("module", "")),
+            ("Nr części", row.get("teilenummer", "")),
+            ("Data prod.", row.get("production_date_display", "")),
+            ("Data eksportu", row.get("exported_at", "")),
+            ("Notatka", row.get("notes", "")),
+        ]
+
+        metadata_html = "".join(
+            f"<tr><th>{html_escape(label)}</th><td>{html_escape(str(value or ''))}</td></tr>"
+            for label, value in metadata_rows
+        )
+
+        changes_html = "".join(change_rows) if change_rows else "<tr><td colspan='3'>Brak zmian.</td></tr>"
+
+        before_html = html_escape(self._normalize_crlf(before_content))
+        after_html = html_escape(self._normalize_crlf(after_content))
+
+        return f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Tahoma, Arial, sans-serif; font-size: 10pt; color: #000; }}
+                h1 {{ font-size: 16pt; margin-bottom: 10px; }}
+                h2 {{ font-size: 12pt; margin-top: 18px; border-bottom: 1px solid #808080; padding-bottom: 3px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-bottom: 12px; }}
+                th, td {{ border: 1px solid #808080; padding: 4px 6px; vertical-align: top; }}
+                th {{ width: 28%; background: #d4d0c8; text-align: left; }}
+                pre {{ white-space: pre-wrap; word-wrap: break-word; background: #ffffff; border: 1px solid #808080; padding: 8px; }}
+                .meta-table th {{ width: 25%; }}
+            </style>
+        </head>
+        <body>
+            <h1>FSW_PSW export</h1>
+            <h2>Metadane</h2>
+            <table class="meta-table">{metadata_html}</table>
+
+            <h2>Zmiany</h2>
+            <table>
+                <tr><th>Opcja</th><th>Było</th><th>Jest</th></tr>
+                {changes_html}
+            </table>
+
+            <h2>FSW_PSW_before.TRC</h2>
+            <pre>{before_html}</pre>
+
+            <h2>FSW_PSW_after.TRC</h2>
+            <pre>{after_html}</pre>
+        </body>
+        </html>
+        """
+
+    def _write_pdf_report(self, pdf_path: Path, row: dict, before_content: str, after_content: str) -> None:
+        document = QTextDocument()
+        document.setHtml(self._pdf_html_for_entry(row, before_content, after_content))
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(str(pdf_path))
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        document.print(printer)
+
+    def _export_selected_history_entry(self):
+        row = self._selected_history_entry()
+        if not row:
+            QMessageBox.information(self, "Eksport", "Wybierz wpis historii do eksportu.")
+            return
+
+        export_root = QFileDialog.getExistingDirectory(self, "Wybierz folder eksportu", str(Path.home()))
+        if not export_root:
+            return
+
+        folder_name = self._build_export_folder_name(row)
+        export_dir = Path(export_root) / folder_name
+        try:
+            export_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            QMessageBox.critical(self, "Eksport", f"Nie udało się utworzyć folderu eksportu:\n{exc}")
+            return
+
+        before_content = self._normalize_crlf(str(row.get("content_before") or ""))
+        after_content = self._normalize_crlf(str(row.get("content_after") or ""))
+        before_path = export_dir / "FSW_PSW_before.TRC"
+        after_path = export_dir / "FSW_PSW_after.TRC"
+        pdf_path = export_dir / "FSW_PSW_report.pdf"
+
+        try:
+            before_path.write_text(before_content, encoding="utf-8", newline="")
+            after_path.write_text(after_content, encoding="utf-8", newline="")
+            self._write_pdf_report(pdf_path, row, before_content, after_content)
+        except Exception as exc:
+            QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać plików eksportu:\n{exc}")
+            return
+
+        QMessageBox.information(
+            self,
+            "Eksport",
+            f"Zapisano do:\n{export_dir}\n\nFSW_PSW_before.TRC\nFSW_PSW_after.TRC\nFSW_PSW_report.pdf",
+        )
+
+    def _populate_vin_values(self):
+        selected = (self.vin_filter_combo.currentData() or "").strip().upper()
+        vin_details: dict[str, tuple[str, str]] = {}
+        for row in self._all_history_rows:
+            vin = str(row.get("vin") or "").strip().upper()
+            if not vin or vin in vin_details:
+                continue
+            model = str(row.get("model") or "").strip().upper()
+            production_date = str(row.get("production_date_display") or "").strip()
+            vin_details[vin] = (model, production_date)
+
+        vins = sorted(vin_details.keys())
+        self.vin_filter_combo.blockSignals(True)
+        self.vin_filter_combo.clear()
+        self.vin_filter_combo.addItem("(dowolny)", "")
+        for vin in vins:
+            model, production_date = vin_details.get(vin, ("", ""))
+            date_text = production_date if production_date else "brak daty"
+            model_text = model if model else "brak modelu"
+            self.vin_filter_combo.addItem(f"{vin} | {model_text} | {date_text}", vin)
+
+        if self._current_vin:
+            index = self.vin_filter_combo.findData(self._current_vin)
+            if index >= 0:
+                self.vin_filter_combo.setCurrentIndex(index)
+            else:
+                self.vin_filter_combo.setCurrentIndex(0)
+        elif selected:
+            index = self.vin_filter_combo.findData(selected)
+            self.vin_filter_combo.setCurrentIndex(index if index >= 0 else 0)
+        else:
+            self.vin_filter_combo.setCurrentIndex(0)
+        self.vin_filter_combo.blockSignals(False)
+
+    def _history_id(self, version: dict) -> int:
+        source = str(version.get("source") or "")
+        if not source.startswith("history:"):
+            return 0
+        try:
+            return int(source.split(":", 1)[1])
+        except Exception:
+            return 0
+
+    def _refresh_version_combos(self, versions: list[dict]):
+        selected_a = self.version_a.currentData()
+        selected_b = self.version_b.currentData()
+
+        self.version_a.blockSignals(True)
+        self.version_b.blockSignals(True)
+        self.version_a.clear()
+        self.version_b.clear()
+
+        for version in versions:
+            label = version.get("label", "Bez nazwy")
+            self.version_a.addItem(label, version)
+            self.version_b.addItem(label, version)
+
+        if selected_a is not None:
+            for idx in range(self.version_a.count()):
+                data = self.version_a.itemData(idx)
+                if data and data.get("source") == selected_a.get("source"):
+                    self.version_a.setCurrentIndex(idx)
+                    break
+            else:
+                if self.version_a.count() > 0:
+                    self.version_a.setCurrentIndex(0)
+        elif self.version_a.count() > 0:
+            self.version_a.setCurrentIndex(0)
+
+        if selected_b is not None:
+            for idx in range(self.version_b.count()):
+                data = self.version_b.itemData(idx)
+                if data and data.get("source") == selected_b.get("source"):
+                    self.version_b.setCurrentIndex(idx)
+                    break
+            else:
+                if self.version_b.count() > 1:
+                    self.version_b.setCurrentIndex(1)
+                elif self.version_b.count() > 0:
+                    self.version_b.setCurrentIndex(0)
+        else:
+            if self.version_b.count() > 1:
+                self.version_b.setCurrentIndex(1)
+            elif self.version_b.count() > 0:
+                self.version_b.setCurrentIndex(0)
+
+        self.version_a.blockSignals(False)
+        self.version_b.blockSignals(False)
+
+    def _apply_history_filters(self):
+        mode = str(self.vin_filter_mode.currentData() or "all")
+        selected_vin = str(self.vin_filter_combo.currentData() or "").strip().upper()
+
+        target_vin = ""
+        if mode == "current" and self._current_vin:
+            target_vin = self._current_vin
+        elif mode == "selected" and selected_vin:
+            target_vin = selected_vin
+
+        if target_vin:
+            rows = [row for row in self._all_history_rows if str(row.get("vin") or "").strip().upper() == target_vin]
+        else:
+            rows = list(self._all_history_rows)
+
+        self._history_rows = rows
+        self._fill_history_table(rows)
+
+        allowed_ids = {int(row.get("id") or 0) for row in rows}
+        visible_versions: list[dict] = []
+        for version in self._all_versions:
+            source = str(version.get("source") or "")
+            if source == "current":
+                visible_versions.append(version)
+                continue
+            history_id = self._history_id(version)
+            if history_id and history_id in allowed_ids:
+                visible_versions.append(version)
+
+        self._refresh_version_combos(visible_versions)
 
     def _compare(self):
         version_a = self.version_a.currentData() or {}
@@ -490,6 +867,7 @@ class CodingPanel(QWidget):
         self._detect_thread: QThread | None = None
         self._detect_worker: ModuleDetectWorker | None = None
         self._filter_text = ""
+        self._column_min_widths: dict[int, int] = {}
         self._setup_ui()
         self._refresh_warning_state()
         self.reload_model_tree()
@@ -542,7 +920,7 @@ class CodingPanel(QWidget):
 
         self.load_trc_button = QPushButton("📂 Załaduj TRC")
         self.load_trc_button.clicked.connect(self.load_selected_trc)
-        self.load_trc_button.setEnabled(False)
+        self.load_trc_button.setEnabled(True)
         left_layout.addWidget(self.load_trc_button)
         left_layout.addStretch(1)
 
@@ -604,8 +982,10 @@ class CodingPanel(QWidget):
         ])
         self.trc_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.trc_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.trc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.trc_table.horizontalHeader().setStretchLastSection(True)
+        self.trc_table.setWordWrap(True)
+        self.trc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.trc_table.horizontalHeader().setStretchLastSection(False)
+        self.trc_table.horizontalHeader().sectionResized.connect(self._on_table_section_resized)
         table_layout.addWidget(self.trc_table, 1)
         splitter.addWidget(table_widget)
 
@@ -617,16 +997,13 @@ class CodingPanel(QWidget):
 
         self.export_man_button = QPushButton("📤 Export .MAN")
         self.export_trc_button = QPushButton("📤 Export .TRC")
-        self.compare_button = QPushButton("👁 Porównaj zmiany")
         self.change_count_label = QLabel("Zmieniono: 0 opcji")
 
         self.export_man_button.clicked.connect(lambda: self.export_current_file(".MAN"))
         self.export_trc_button.clicked.connect(lambda: self.export_current_file(".TRC"))
-        self.compare_button.clicked.connect(self.open_history_dialog)
 
         toolbar_layout.addWidget(self.export_man_button)
         toolbar_layout.addWidget(self.export_trc_button)
-        toolbar_layout.addWidget(self.compare_button)
         toolbar_layout.addStretch()
         toolbar_layout.addWidget(self.change_count_label)
 
@@ -690,7 +1067,9 @@ class CodingPanel(QWidget):
         self._module_option_info = {}
         self._module_loaded = False
         self._trc_loaded = False
-        self.load_trc_button.setEnabled(False)
+        self.model_combo.setEnabled(False)
+        self.module_combo.setEnabled(False)
+        self.load_trc_button.setEnabled(True)
         self.detect_module_button.setEnabled(False)
 
         daten_path = Path(self._paths.daten_path)
@@ -721,12 +1100,14 @@ class CodingPanel(QWidget):
             self.context_label.setText("Nie znaleziono folderów chassis z plikami .Cxx w DATEN")
             self._module_options = set()
             self._render_table()
+            self.load_trc_button.setEnabled(False)
             return
 
         if select_first:
             self.model_combo.setCurrentIndex(0)
         else:
-            self.context_label.setText("Wybierz model, następnie załaduj TRC")
+            self.model_combo.setCurrentIndex(-1)
+            self.context_label.setText("Najpierw załaduj TRC, potem wybierz model")
 
     def _on_model_changed(self, index: int):
         if index < 0:
@@ -883,16 +1264,10 @@ class CodingPanel(QWidget):
             self._detect_thread = None
 
     def load_selected_trc(self):
-        if not self._current_model:
-            QMessageBox.information(self, "TRC", "Najpierw wybierz model.")
-            return
         self.load_trc_from_path(Path(self._paths.trc_path))
 
     def reload_current_trc(self):
         self._refresh_warning_state()
-        if not self._current_model:
-            self.context_label.setText("Wybierz model, aby wczytać FSW_PSW.TRC")
-            return
         self.load_trc_from_path(Path(self._paths.trc_path))
 
     def load_trc_from_path(self, trc_path: Path):
@@ -904,6 +1279,8 @@ class CodingPanel(QWidget):
             self._current_trc_content = ""
             self._baseline_content = ""
             self._trc_loaded = False
+            self.model_combo.setEnabled(False)
+            self.module_combo.setEnabled(False)
             self.detect_module_button.setEnabled(False)
             self._render_table()
             self.context_label.setText(f"Nie znaleziono pliku: {trc_path}")
@@ -915,7 +1292,11 @@ class CodingPanel(QWidget):
         self._segments = parse_trc_content(content)
         self._option_rows = [index for index, segment in enumerate(self._segments) if segment.kind == "option"]
         self._trc_loaded = True
-        self.detect_module_button.setEnabled(True)
+        self.model_combo.setEnabled(True)
+        self.module_combo.setEnabled(True)
+        if self.model_combo.currentIndex() < 0 and self.model_combo.count() > 0:
+            self.model_combo.setCurrentIndex(0)
+        self.detect_module_button.setEnabled(bool(self._current_model))
 
         if self._current_module_file:
             self._apply_module_filter_to_table()
@@ -923,7 +1304,7 @@ class CodingPanel(QWidget):
             self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
             self._render_table()
             self.context_label.setText(
-                f"Załadowano TRC ({len(self._option_rows)} opcji). Krok 3: wybierz moduł lub użyj '🔍 Wykryj moduł'."
+                f"Załadowano TRC ({len(self._option_rows)} opcji). Wybierz model i moduł lub użyj '🔍 Wykryj moduł'."
             )
 
     def _apply_module_filter_to_table(self):
@@ -1021,6 +1402,7 @@ class CodingPanel(QWidget):
             self._apply_row_style(row_index)
 
         self.trc_table.resizeColumnsToContents()
+        self._apply_table_column_constraints()
         self._apply_table_filter()
         self._update_change_count()
 
@@ -1135,6 +1517,72 @@ class CodingPanel(QWidget):
         combo.currentTextChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text.replace("⚠️ ", "")))
         return combo
 
+    def _on_table_section_resized(self, logical_index: int, old_size: int, new_size: int):
+        minimum_width = self._column_min_widths.get(logical_index)
+        if minimum_width is None or new_size >= minimum_width:
+            return
+
+        header = self.trc_table.horizontalHeader()
+        header.blockSignals(True)
+        header.resizeSection(logical_index, minimum_width)
+        header.blockSignals(False)
+
+    def _apply_table_column_constraints(self):
+        if not self._table_entries:
+            self._column_min_widths = {}
+            return
+
+        header = self.trc_table.horizontalHeader()
+        metrics = self.trc_table.fontMetrics()
+        labels = [self.trc_table.horizontalHeaderItem(index).text() for index in range(self.trc_table.columnCount())]
+        min_widths: dict[int, int] = {}
+
+        for column_index, label in enumerate(labels):
+            max_width = metrics.horizontalAdvance(label) + 28
+            for row_index, entry in enumerate(self._table_entries):
+                if entry.get("kind") == "group":
+                    text = f"── {entry.get('group', '')} ──" if column_index == 0 else ""
+                else:
+                    segment = self._segments[entry["segment_index"]]
+                    if column_index == 0:
+                        text = str(entry["option_index"] + 1)
+                    elif column_index == 1:
+                        text = segment.option
+                    elif column_index == 2:
+                        text = self._translator.translate(segment.option)
+                    elif column_index == 3:
+                        widget = self.trc_table.cellWidget(row_index, 3)
+                        if isinstance(widget, QComboBox):
+                            text = widget.currentText()
+                        else:
+                            item = self.trc_table.item(row_index, 3)
+                            text = item.text() if item else segment.value
+                    elif column_index == 4:
+                        text = self._translator.translate(segment.value)
+                    elif column_index == 5:
+                        item = self.trc_table.item(row_index, 5)
+                        text = item.text() if item else ""
+                    else:
+                        text = ""
+
+                if not text:
+                    continue
+
+                words = text.split()
+                if words:
+                    wrapped_width = max(metrics.horizontalAdvance(word) for word in words)
+                else:
+                    wrapped_width = metrics.horizontalAdvance(text)
+                max_width = max(max_width, wrapped_width + 28)
+
+            min_widths[column_index] = max_width
+            if header.sectionSize(column_index) < max_width:
+                header.blockSignals(True)
+                header.resizeSection(column_index, max_width)
+                header.blockSignals(False)
+
+        self._column_min_widths = min_widths
+
     def _apply_row_style(self, row_index: int):
         if row_index < 0 or row_index >= len(self._table_entries):
             return
@@ -1147,15 +1595,17 @@ class CodingPanel(QWidget):
         segment = self._segments[segment_index]
         changed = segment.value != segment.original_value
         editable = self._row_editable.get(entry["option_index"], True)
+        changed_color = QColor("#CDEFC8")
+        locked_color = QColor("#E0E0E0")
 
         for column in range(self.trc_table.columnCount()):
             item = self.trc_table.item(row_index, column)
             if item:
                 if not editable:
-                    item.setBackground(QColor("#E0E0E0"))
+                    item.setBackground(locked_color)
                     item.setForeground(QColor("#606060"))
                 elif changed:
-                    item.setBackground(QColor("#FFFF99"))
+                    item.setBackground(changed_color)
                     item.setForeground(QColor("#000000"))
                 else:
                     item.setBackground(QColor("#FFFFFF"))
@@ -1166,20 +1616,22 @@ class CodingPanel(QWidget):
             if not editable:
                 value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
             elif changed:
-                value_widget.setStyleSheet("background-color: #FFFF99; color: #000000;")
+                value_widget.setStyleSheet("background-color: #CDEFC8; color: #000000;")
             else:
                 value_widget.setStyleSheet("")
         elif isinstance(value_widget, QComboBox):
             if not editable:
                 value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
             elif changed:
-                value_widget.setStyleSheet("background-color: #FFFF99; color: #000000;")
+                value_widget.setStyleSheet("background-color: #CDEFC8; color: #000000;")
             else:
                 value_widget.setStyleSheet("")
 
         status_item = self.trc_table.item(row_index, 5)
         if status_item:
             status_item.setText("Tak" if changed and editable else "Nie")
+
+        self.trc_table.resizeRowToContents(row_index)
 
     def _update_change_count(self):
         self._sync_values_from_widgets()
@@ -1264,6 +1716,9 @@ class CodingPanel(QWidget):
 
         if self._db and self._current_model and self._current_module:
             try:
+                work_folder = str(Path(self._paths.trc_path).parent) if self._paths.trc_path else str(DEFAULT_WORK_PATH)
+                sysdaten = parse_sysdaten(work_folder)
+                fa_data = parse_fa_trc(work_folder)
                 self._db.save_trc_history(
                     self._current_model,
                     self._current_module,
@@ -1272,6 +1727,10 @@ class CodingPanel(QWidget):
                     content_after,
                     changes,
                     notes=notes,
+                    vin=str(sysdaten.get("FAHRGESTELL_NR", "")).strip(),
+                    teilenummer=str(sysdaten.get("TEILENUMMER", "")).strip(),
+                    production_date=str(fa_data.get("production_date", "")).strip(),
+                    sa_codes=list(fa_data.get("sa_codes", []) or []),
                 )
             except Exception:
                 pass
@@ -1283,22 +1742,27 @@ class CodingPanel(QWidget):
         QMessageBox.information(self, "Eksport", f"Zapisano do:\n{export_path}")
 
     def open_history_dialog(self):
-        versions = self._build_history_versions()
+        versions, history_rows, current_vin = self._build_history_versions()
         if len(versions) < 1:
             QMessageBox.information(self, "Historia", "Brak danych do porównania.")
             return
 
-        dialog = HistoryCompareDialog(versions, self)
+        dialog = HistoryCompareDialog(versions, history_rows=history_rows, current_vin=current_vin, parent=self)
         dialog.exec()
 
-    def _build_history_versions(self) -> list[dict]:
+    def _build_history_versions(self) -> tuple[list[dict], list[dict], str]:
         versions: list[dict] = []
+        history_rows: list[dict] = []
+        work_folder = str(Path(self._paths.trc_path).parent) if self._paths.trc_path else str(DEFAULT_WORK_PATH)
+        sysdaten_current = parse_sysdaten(work_folder)
+        current_vin = str(sysdaten_current.get("FAHRGESTELL_NR", "")).strip().upper()
         current_label = f"Aktualny plik ({Path(self._paths.trc_path).name})"
         versions.append(
             {
                 "label": current_label,
                 "content": self._current_content(),
                 "source": "current",
+                "vin": current_vin,
             }
         )
 
@@ -1311,10 +1775,38 @@ class CodingPanel(QWidget):
                         "label": label,
                         "content": row.get("content_after", ""),
                         "source": f"history:{row.get('id', 0)}",
+                        "vin": str(row.get("vin") or "").strip().upper(),
                     }
                 )
 
-        return versions
+        overview_rows: list[dict] = []
+        for row in history_rows:
+            changes = row.get("changed_options") or []
+            changes_count = len(changes) if isinstance(changes, list) else 0
+            production_raw = str(row.get("production_date") or "").strip()
+            production_display = self._format_production_date(production_raw)
+            overview_rows.append(
+                {
+                    "id": int(row.get("id") or 0),
+                    "vin": str(row.get("vin") or "").strip(),
+                    "model": str(row.get("model") or "").strip().upper(),
+                    "module": str(row.get("module") or "").strip(),
+                    "teilenummer": str(row.get("teilenummer") or "").strip(),
+                    "production_date_display": production_display,
+                    "changes_text": "1 zmiana" if changes_count == 1 else f"{changes_count} zmian",
+                    "exported_at": str(row.get("exported_at") or "").strip(),
+                }
+            )
+
+        return versions, overview_rows, current_vin
+
+    def _format_production_date(self, production_date: str) -> str:
+        value = (production_date or "").strip()
+        if len(value) == 4 and value.isdigit():
+            month = value[:2]
+            year = value[2:]
+            return f"{month}/20{year}"
+        return value
 
     def _format_history_label(self, row: dict) -> str:
         exported_at = (row.get("exported_at") or "").strip()

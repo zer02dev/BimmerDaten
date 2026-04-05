@@ -1410,7 +1410,7 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(icon)
 
     def _setup_ui(self):
-        self.setWindowTitle("BimmerDaten — EDIABAS PRG Viewer")
+        self.setWindowTitle("BimmerDaten - EDIABAS and NCS Expert")
         self.setMinimumSize(900, 600)
         self.resize(1100, 700)
 
@@ -1509,7 +1509,7 @@ class MainWindow(QMainWindow):
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Gotowy. Otwórz plik .PRG aby rozpocząć.")
+        self.status_bar.clearMessage()
 
         # Połącz kliknięcie na liście z panelem szczegółów
         self.job_list_panel.job_list.currentItemChanged.connect(
@@ -1705,7 +1705,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         
         # App name (bold, large)
-        app_name_label = QLabel("BimmerDaten")
+        app_name_label = QLabel("")
         app_name_font = QFont("Tahoma", 16, QFont.Weight.Bold)
         app_name_label.setFont(app_name_font)
         layout.addWidget(app_name_label)
@@ -1824,7 +1824,6 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("BimmerDaten")
-    app.setApplicationDisplayName("BimmerDaten")
     app.setStyle("Windows")  # styl Windows dla lepszego efektu retro
     icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
     if icon_path.exists():
