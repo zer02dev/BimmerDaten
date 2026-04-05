@@ -22,6 +22,7 @@ class Database:
     def _create_tables(self) -> None:
         self._ensure_translations_schema()
         self._ensure_trc_history_schema()
+        self._ensure_trc_favorites_schema()
         self.conn.commit()
 
     def _ensure_translations_schema(self) -> None:
@@ -110,6 +111,20 @@ class Database:
             self.conn.execute("ALTER TABLE trc_history ADD COLUMN production_date TEXT")
         if "sa_codes" not in columns:
             self.conn.execute("ALTER TABLE trc_history ADD COLUMN sa_codes TEXT")
+
+    def _ensure_trc_favorites_schema(self) -> None:
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trc_favorites (
+                model        TEXT NOT NULL,
+                module       TEXT NOT NULL,
+                option_name  TEXT NOT NULL,
+                pinned       INTEGER NOT NULL DEFAULT 1,
+                updated_at   TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (model, module, option_name)
+            );
+            """
+        )
 
     def save_trc_history(
         self,
@@ -380,6 +395,62 @@ class Database:
         result["en"] = row["comment_en"] if row["comment_en"] else None
         result["pl"] = row["comment_pl"] if row["comment_pl"] else None
         return result
+
+    def get_trc_favorites(self, model: str, module: str) -> set[str]:
+        model_key = (model or "").strip().upper()
+        module_key = (module or "").strip().upper()
+        if not model_key or not module_key:
+            return set()
+
+        try:
+            rows = self.conn.execute(
+                """
+                SELECT option_name
+                FROM trc_favorites
+                WHERE model = ? AND module = ? AND pinned = 1
+                """,
+                (model_key, module_key),
+            ).fetchall()
+        except sqlite3.Error:
+            return set()
+
+        favorites: set[str] = set()
+        for row in rows:
+            option_name = str(row["option_name"] or "").strip().upper()
+            if option_name:
+                favorites.add(option_name)
+        return favorites
+
+    def set_trc_favorite(self, model: str, module: str, option_name: str, pinned: bool) -> None:
+        model_key = (model or "").strip().upper()
+        module_key = (module or "").strip().upper()
+        option_key = (option_name or "").strip().upper()
+        if not model_key or not module_key or not option_key:
+            return
+
+        try:
+            if pinned:
+                self.conn.execute(
+                    """
+                    INSERT INTO trc_favorites (model, module, option_name, pinned)
+                    VALUES (?, ?, ?, 1)
+                    ON CONFLICT(model, module, option_name) DO UPDATE SET
+                        pinned = 1,
+                        updated_at = datetime('now')
+                    """,
+                    (model_key, module_key, option_key),
+                )
+            else:
+                self.conn.execute(
+                    """
+                    DELETE FROM trc_favorites
+                    WHERE model = ? AND module = ? AND option_name = ?
+                    """,
+                    (model_key, module_key, option_key),
+                )
+            self.conn.commit()
+        except sqlite3.Error:
+            return
 
     def close(self):
         try:

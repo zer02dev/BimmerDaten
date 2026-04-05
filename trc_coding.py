@@ -9,9 +9,11 @@ import os
 import configparser
 import json
 import re
+import webbrowser
 from html import escape as html_escape
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal, QSettings
 from PyQt6.QtGui import QColor
@@ -1513,6 +1515,8 @@ class CodingPanel(QWidget):
         self._detect_thread: QThread | None = None
         self._detect_worker: ModuleDetectWorker | None = None
         self._filter_text = ""
+        self._favorites_only = False
+        self._favorite_options: set[str] = set()
         self._column_min_widths: dict[int, int] = {}
         self._ncs_profile_status: dict = {
             "found": False,
@@ -1633,6 +1637,10 @@ class CodingPanel(QWidget):
         self.search_edit.textChanged.connect(self._on_filter_text_changed)
         filter_row.addWidget(self.search_edit, 1)
 
+        self.favorites_only_checkbox = QCheckBox("Tylko ulubione")
+        self.favorites_only_checkbox.toggled.connect(self._on_favorites_only_toggled)
+        filter_row.addWidget(self.favorites_only_checkbox)
+
         self.clear_search_button = QPushButton("✕")
         self.clear_search_button.setFixedWidth(24)
         self.clear_search_button.setToolTip("Wyczyść filtr")
@@ -1647,8 +1655,9 @@ class CodingPanel(QWidget):
         table_layout.addWidget(self.context_label)
 
         self.trc_table = QTableWidget()
-        self.trc_table.setColumnCount(6)
+        self.trc_table.setColumnCount(7)
         self.trc_table.setHorizontalHeaderLabels([
+            "★",
             "Nr",
             "Opcja",
             "Tłumaczenie",
@@ -1659,6 +1668,8 @@ class CodingPanel(QWidget):
         self.trc_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.trc_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.trc_table.setWordWrap(True)
+        self.trc_table.cellClicked.connect(self._on_table_cell_clicked)
+        self.trc_table.cellDoubleClicked.connect(self._on_table_cell_double_clicked)
         self.trc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.trc_table.horizontalHeader().setStretchLastSection(False)
         self.trc_table.horizontalHeader().sectionResized.connect(self._on_table_section_resized)
@@ -1887,6 +1898,7 @@ class CodingPanel(QWidget):
         self._current_module_file = ""
         self._module_options = set()
         self._module_option_info = {}
+        self._favorite_options = set()
         self._module_loaded = False
         self._trc_loaded = False
         self.model_combo.setEnabled(False)
@@ -1940,6 +1952,7 @@ class CodingPanel(QWidget):
         self._current_module_file = ""
         self._module_options = set()
         self._module_option_info = {}
+        self._favorite_options = set()
         self._module_loaded = False
         self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
         if self._segments:
@@ -1968,6 +1981,7 @@ class CodingPanel(QWidget):
             self._current_module_file = ""
             self._module_options = set()
             self._module_option_info = {}
+            self._favorite_options = set()
             self._module_loaded = False
             if self._segments:
                 self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
@@ -1977,6 +1991,7 @@ class CodingPanel(QWidget):
 
         self._current_module_file = module_file
         self._current_module = module_file.split(".", 1)[0].upper() if module_file else ""
+        self._load_favorites_for_current_module()
 
         cache_key = (self._current_model, module_file.upper())
         if cache_key in self._module_options_cache:
@@ -2183,6 +2198,14 @@ class CodingPanel(QWidget):
             option_index = entry["option_index"]
             segment = self._segments[segment_index]
             editable = self._row_editable.get(option_index, True)
+            option_key = segment.option.strip().upper()
+            is_favorite = option_key in self._favorite_options
+
+            favorite_item = QTableWidgetItem("★" if is_favorite else "☆")
+            favorite_item.setFlags(favorite_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            favorite_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            favorite_item.setForeground(QColor("#CC8800") if is_favorite else QColor("#888888"))
+            favorite_item.setToolTip("Kliknij, aby przypiąć/odpiąć opcję")
 
             number_item = QTableWidgetItem(str(option_index + 1))
             number_item.setFlags(number_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -2202,18 +2225,18 @@ class CodingPanel(QWidget):
             if self._module_loaded:
                 if editable and params:
                     value_editor = self._build_value_combo(row_index, segment.value, params)
-                    self.trc_table.setCellWidget(row_index, 3, value_editor)
+                    self.trc_table.setCellWidget(row_index, 4, value_editor)
                 else:
                     value_item = QTableWidgetItem(segment.value)
                     value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     value_item.setForeground(QColor("#888888"))
-                    self.trc_table.setItem(row_index, 3, value_item)
+                    self.trc_table.setItem(row_index, 4, value_item)
             else:
                 value_editor = QLineEdit(segment.value)
                 value_editor.textChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text))
                 value_editor.setMinimumWidth(180)
                 value_editor.setReadOnly(not editable)
-                self.trc_table.setCellWidget(row_index, 3, value_editor)
+                self.trc_table.setCellWidget(row_index, 4, value_editor)
 
             value_translation_item = QTableWidgetItem(self._translator.translate(segment.value))
             value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -2221,14 +2244,16 @@ class CodingPanel(QWidget):
             changed_item = QTableWidgetItem("Nie")
             changed_item.setFlags(changed_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-            self.trc_table.setItem(row_index, 0, number_item)
-            self.trc_table.setItem(row_index, 1, option_item)
-            self.trc_table.setItem(row_index, 2, translation_item)
-            self.trc_table.setItem(row_index, 4, value_translation_item)
-            self.trc_table.setItem(row_index, 5, changed_item)
+            self.trc_table.setItem(row_index, 0, favorite_item)
+            self.trc_table.setItem(row_index, 1, number_item)
+            self.trc_table.setItem(row_index, 2, option_item)
+            self.trc_table.setItem(row_index, 3, translation_item)
+            self.trc_table.setItem(row_index, 5, value_translation_item)
+            self.trc_table.setItem(row_index, 6, changed_item)
             self._apply_row_style(row_index)
 
         self.trc_table.resizeColumnsToContents()
+        self.trc_table.setColumnWidth(0, 36)
         self._apply_table_column_constraints()
         self._apply_table_filter()
         self._update_change_count()
@@ -2238,12 +2263,73 @@ class CodingPanel(QWidget):
         self.clear_search_button.setEnabled(bool(self._filter_text))
         self._apply_table_filter()
 
+    def _on_favorites_only_toggled(self, checked: bool):
+        self._favorites_only = bool(checked)
+        self._apply_table_filter()
+
+    def _load_favorites_for_current_module(self):
+        if not self._db or not self._current_model or not self._current_module:
+            self._favorite_options = set()
+            return
+        self._favorite_options = self._db.get_trc_favorites(self._current_model, self._current_module)
+
+    def _set_option_favorite(self, option_name: str, pinned: bool):
+        option_key = (option_name or "").strip().upper()
+        if not option_key:
+            return
+
+        if pinned:
+            self._favorite_options.add(option_key)
+        else:
+            self._favorite_options.discard(option_key)
+
+        if self._db and self._current_model and self._current_module:
+            self._db.set_trc_favorite(self._current_model, self._current_module, option_key, pinned)
+
+    def _on_table_cell_clicked(self, row: int, column: int):
+        if column != 0:
+            return
+        if row < 0 or row >= len(self._table_entries):
+            return
+
+        entry = self._table_entries[row]
+        if entry.get("kind") != "option":
+            return
+
+        segment = self._segments[entry["segment_index"]]
+        option_key = segment.option.strip().upper()
+        is_favorite = option_key in self._favorite_options
+        self._set_option_favorite(option_key, not is_favorite)
+        self._render_table()
+
+    def _on_table_cell_double_clicked(self, row: int, column: int):
+        # "Opcja" column contains the original (usually German) coding function name.
+        if column != 2:
+            return
+        if row < 0 or row >= len(self._table_entries):
+            return
+
+        entry = self._table_entries[row]
+        if entry.get("kind") != "option":
+            return
+
+        segment = self._segments[entry["segment_index"]]
+        query = f"{(segment.option or '').strip()} meaning".strip()
+        if not query or query == "meaning":
+            return
+
+        url = f"https://www.google.com/search?q={quote_plus(query)}"
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
     def _apply_table_filter(self):
         if not self._table_entries:
             return
 
         query = (self._filter_text or "").strip()
-        if not query:
+        if not query and not self._favorites_only:
             for row_index in range(len(self._table_entries)):
                 self.trc_table.setRowHidden(row_index, False)
             return
@@ -2261,7 +2347,10 @@ class CodingPanel(QWidget):
             segment = self._segments[entry["segment_index"]]
             option_name = segment.option or ""
             option_translation = self._translator.translate(option_name)
-            is_match = query in option_name.casefold() or query in option_translation.casefold()
+            option_key = option_name.strip().upper()
+            text_match = not query or query in option_name.casefold() or query in option_translation.casefold()
+            favorite_match = (not self._favorites_only) or (option_key in self._favorite_options)
+            is_match = text_match and favorite_match
             option_row_visible[row_index] = is_match
 
             if is_match and entry.get("group") and current_group_row is not None:
@@ -2312,7 +2401,7 @@ class CodingPanel(QWidget):
         segment = self._segments[segment_index]
         segment.value = text
 
-        value_item = self.trc_table.item(row_index, 4)
+        value_item = self.trc_table.item(row_index, 5)
         if value_item:
             value_item.setText(self._translator.translate(text))
 
@@ -2372,22 +2461,24 @@ class CodingPanel(QWidget):
                 else:
                     segment = self._segments[entry["segment_index"]]
                     if column_index == 0:
-                        text = str(entry["option_index"] + 1)
+                        text = "★" if segment.option.strip().upper() in self._favorite_options else "☆"
                     elif column_index == 1:
-                        text = segment.option
+                        text = str(entry["option_index"] + 1)
                     elif column_index == 2:
-                        text = self._translator.translate(segment.option)
+                        text = segment.option
                     elif column_index == 3:
-                        widget = self.trc_table.cellWidget(row_index, 3)
+                        text = self._translator.translate(segment.option)
+                    elif column_index == 4:
+                        widget = self.trc_table.cellWidget(row_index, 4)
                         if isinstance(widget, QComboBox):
                             text = widget.currentText()
                         else:
-                            item = self.trc_table.item(row_index, 3)
+                            item = self.trc_table.item(row_index, 4)
                             text = item.text() if item else segment.value
-                    elif column_index == 4:
-                        text = self._translator.translate(segment.value)
                     elif column_index == 5:
-                        item = self.trc_table.item(row_index, 5)
+                        text = self._translator.translate(segment.value)
+                    elif column_index == 6:
+                        item = self.trc_table.item(row_index, 6)
                         text = item.text() if item else ""
                     else:
                         text = ""
@@ -2438,7 +2529,7 @@ class CodingPanel(QWidget):
                     item.setBackground(QColor("#FFFFFF"))
                     item.setForeground(QColor("#000000"))
 
-        value_widget = self.trc_table.cellWidget(row_index, 3)
+        value_widget = self.trc_table.cellWidget(row_index, 4)
         if isinstance(value_widget, QLineEdit):
             if not editable:
                 value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
@@ -2454,9 +2545,17 @@ class CodingPanel(QWidget):
             else:
                 value_widget.setStyleSheet("")
 
-        status_item = self.trc_table.item(row_index, 5)
+        status_item = self.trc_table.item(row_index, 6)
         if status_item:
             status_item.setText("Tak" if changed and editable else "Nie")
+
+        favorite_item = self.trc_table.item(row_index, 0)
+        if favorite_item:
+            option_key = segment.option.strip().upper()
+            is_favorite = option_key in self._favorite_options
+            favorite_item.setText("★" if is_favorite else "☆")
+            favorite_item.setForeground(QColor("#CC8800") if is_favorite else QColor("#888888"))
+            favorite_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.trc_table.resizeRowToContents(row_index)
 
@@ -2476,7 +2575,7 @@ class CodingPanel(QWidget):
             if entry.get("kind") != "option":
                 continue
             segment_index = entry["segment_index"]
-            widget = self.trc_table.cellWidget(row_index, 3)
+            widget = self.trc_table.cellWidget(row_index, 4)
             if isinstance(widget, QLineEdit):
                 self._segments[segment_index].value = widget.text()
             elif isinstance(widget, QComboBox):
@@ -2485,7 +2584,7 @@ class CodingPanel(QWidget):
                     value = value[3:].strip()
                 self._segments[segment_index].value = value
             else:
-                value_item = self.trc_table.item(row_index, 3)
+                value_item = self.trc_table.item(row_index, 4)
                 if value_item:
                     self._segments[segment_index].value = value_item.text()
 
