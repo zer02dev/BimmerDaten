@@ -6,6 +6,7 @@ Styl: Windows 98/2000 — pasuje do epoki EDIABAS 😄
 
 import sys
 import platform
+import json
 from pathlib import Path
 from html import escape as html_escape
 from PyQt6.QtWidgets import (
@@ -39,6 +40,12 @@ try:
     CODING_AVAILABLE = True
 except Exception:
     CODING_AVAILABLE = False
+
+try:
+    from sa_options_widget import SAOptionsWidget
+    SA_OPTIONS_AVAILABLE = True
+except Exception:
+    SA_OPTIONS_AVAILABLE = False
 
 try:
     import winsound
@@ -1545,6 +1552,7 @@ class MainWindow(QMainWindow):
         self._models_data: dict = {}
         self._models_loaded_for_path: str = ""
         self._models_parser_cls = None
+        self._sa_config = self._load_sa_config()
 
         if DB_AVAILABLE:
             db_path = Path(__file__).resolve().parent / "data" / "database.db"
@@ -1577,6 +1585,28 @@ class MainWindow(QMainWindow):
             if Path(candidate).exists():
                 return candidate
         return None
+
+    def _load_sa_config(self) -> dict:
+        config_path = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
+        defaults = {
+            "daten": r"C:\NCSEXPER\DATEN",
+            "work": r"C:\NCSEXPER\WORK",
+        }
+
+        if not config_path.exists():
+            return defaults
+
+        try:
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+            daten_path = str(payload.get("daten_path") or defaults["daten"]).strip() or defaults["daten"]
+            trc_path = str(payload.get("trc_path") or "").strip()
+            work_path = str(Path(trc_path).parent) if trc_path else defaults["work"]
+            return {
+                "daten": daten_path,
+                "work": work_path,
+            }
+        except Exception:
+            return defaults
 
     def _set_app_icon(self):
         icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
@@ -1675,6 +1705,15 @@ class MainWindow(QMainWindow):
             fallback_layout.addWidget(QLabel("Nie udało się załadować panelu kodowania."))
 
         self.top_tabs.addTab(self.coding_panel, "⚙️ Kodowanie")
+
+        if SA_OPTIONS_AVAILABLE:
+            self.sa_options_panel = SAOptionsWidget(self._db, self._sa_config, self)
+        else:
+            self.sa_options_panel = QWidget()
+            sa_layout = QVBoxLayout(self.sa_options_panel)
+            sa_layout.addWidget(QLabel("Nie udało się załadować zakładki Opcje SA."))
+
+        self.top_tabs.addTab(self.sa_options_panel, "🔧 Opcje SA")
 
         if not self._inpa_path:
             self.models_panel.set_placeholder("Nie znaleziono instalacji INPA")

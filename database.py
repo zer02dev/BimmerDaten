@@ -23,6 +23,7 @@ class Database:
         self._ensure_translations_schema()
         self._ensure_trc_history_schema()
         self._ensure_trc_favorites_schema()
+        self._ensure_sa_translations_schema()
         self.conn.commit()
 
     def _ensure_translations_schema(self) -> None:
@@ -122,6 +123,21 @@ class Database:
                 pinned       INTEGER NOT NULL DEFAULT 1,
                 updated_at   TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY (model, module, option_name)
+            );
+            """
+        )
+
+    def _ensure_sa_translations_schema(self) -> None:
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sa_translations (
+                chassis     TEXT,
+                sa_code     TEXT,
+                desc_de     TEXT,
+                desc_en     TEXT,
+                desc_pl     TEXT,
+                updated_at  TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (chassis, sa_code)
             );
             """
         )
@@ -451,6 +467,57 @@ class Database:
             self.conn.commit()
         except sqlite3.Error:
             return
+
+    def get_sa_translation(self, chassis: str, sa_code: str, lang: str) -> Optional[str]:
+        lang_map = {
+            "de": "desc_de",
+            "en": "desc_en",
+            "pl": "desc_pl",
+        }
+        column = lang_map.get((lang or "").lower())
+        if not column:
+            return None
+
+        try:
+            row = self.conn.execute(
+                f"SELECT {column} FROM sa_translations WHERE chassis = ? AND sa_code = ?",
+                ((chassis or "").strip().upper(), (sa_code or "").strip().upper()),
+            ).fetchone()
+        except sqlite3.Error:
+            return None
+
+        if not row:
+            return None
+        value = row[column]
+        return value if value else None
+
+    def save_sa_translation(
+        self,
+        chassis: str,
+        sa_code: str,
+        desc_de: str | None = None,
+        desc_en: str | None = None,
+        desc_pl: str | None = None,
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO sa_translations (chassis, sa_code, desc_de, desc_en, desc_pl)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(chassis, sa_code) DO UPDATE SET
+                desc_de = COALESCE(excluded.desc_de, desc_de),
+                desc_en = COALESCE(excluded.desc_en, desc_en),
+                desc_pl = COALESCE(excluded.desc_pl, desc_pl),
+                updated_at = datetime('now')
+            """,
+            (
+                (chassis or "").strip().upper(),
+                (sa_code or "").strip().upper(),
+                desc_de,
+                desc_en,
+                desc_pl,
+            ),
+        )
+        self.conn.commit()
 
     def close(self):
         try:
