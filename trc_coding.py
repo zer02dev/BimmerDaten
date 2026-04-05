@@ -50,6 +50,11 @@ try:
 except Exception:
     winreg = None
 
+try:
+    import winsound
+except Exception:
+    winsound = None
+
 
 DEFAULT_TRC_PATH = Path(r"C:\NCSEXPER\WORK\FSW_PSW.TRC")
 DEFAULT_DATEN_PATH = Path(r"C:\NCSEXPER\DATEN")
@@ -57,6 +62,28 @@ DEFAULT_TRANSLATIONS_PATH = Path(r"C:\NCS Dummy\Translations.csv")
 DEFAULT_MAND_PATH = Path(r"C:\NCSEXPER\WORK\FSW_PSW.MAN")
 DEFAULT_WORK_PATH = Path(r"C:\NCSEXPER\WORK")
 CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
+
+
+def play_sound(sound_type: str = "success") -> None:
+    """Gra dźwięk systemowy dla danego typu akcji."""
+    if winsound is None:
+        return
+
+    try:
+        if sound_type == "success":
+            for freq, duration in [(800, 100), (1000, 100)]:
+                winsound.Beep(freq, duration)
+        elif sound_type == "error":
+            for freq, duration in [(400, 150), (300, 150), (400, 150)]:
+                winsound.Beep(freq, duration)
+        elif sound_type == "warning":
+            for freq, duration in [(600, 100), (800, 100), (600, 100)]:
+                winsound.Beep(freq, duration)
+        elif sound_type == "info":
+            winsound.Beep(1200, 80)
+    except Exception:
+        pass
+
 
 
 @dataclass
@@ -1048,6 +1075,7 @@ class HistoryCompareDialog(QDialog):
         row = export_dialog.selected_row()
         if not row:
             QMessageBox.information(self, "Eksport", "Wybierz wpis historii do eksportu.")
+            play_sound("info")
             return
 
         export_root = QFileDialog.getExistingDirectory(self, "Wybierz folder eksportu", str(Path.home()))
@@ -1060,6 +1088,7 @@ class HistoryCompareDialog(QDialog):
             export_dir.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
             QMessageBox.critical(self, "Eksport", f"Nie udało się utworzyć folderu eksportu:\n{exc}")
+            play_sound("error")
             return
 
         before_content = self._normalize_crlf(str(row.get("content_before") or ""))
@@ -1079,6 +1108,7 @@ class HistoryCompareDialog(QDialog):
             self._write_pdf_report(pdf_path, row, changes)
         except Exception as exc:
             QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać plików eksportu:\n{exc}")
+            play_sound("error")
             return
 
         QMessageBox.information(
@@ -1385,6 +1415,7 @@ class HistoryExportDialog(QDialog):
         row = self._current_full_row()
         if not row:
             QMessageBox.information(self, "Eksport", "Wybierz wpis z listy.")
+            play_sound("info")
             return
         self._selected_row = row
         self.accept()
@@ -1983,9 +2014,11 @@ class CodingPanel(QWidget):
     def detect_module_from_current_trc(self):
         if not self._current_model:
             QMessageBox.information(self, "Wykrywanie", "Najpierw wybierz model.")
+            play_sound("info")
             return
         if not self._trc_loaded:
             QMessageBox.information(self, "Wykrywanie", "Najpierw załaduj FSW_PSW.TRC.")
+            play_sound("info")
             return
 
         if self._detect_thread and self._detect_thread.isRunning():
@@ -1995,6 +2028,7 @@ class CodingPanel(QWidget):
         trc_map = parse_trc_file(str(trc_path))
         if not trc_map:
             QMessageBox.information(self, "Wykrywanie", "Nie udało się odczytać opcji z FSW_PSW.TRC.")
+            play_sound("warning")
             return
 
         self.detect_module_button.setEnabled(False)
@@ -2020,6 +2054,7 @@ class CodingPanel(QWidget):
         self._stop_detect_ui()
         if not candidates:
             QMessageBox.information(self, "Wykrywanie", "Brak kandydatów powyżej 30% dopasowania.")
+            play_sound("info")
             return
 
         dialog = ModuleDetectDialog(candidates, self)
@@ -2040,6 +2075,7 @@ class CodingPanel(QWidget):
     def _on_detect_failed(self, message: str):
         self._stop_detect_ui()
         QMessageBox.warning(self, "Wykrywanie", f"Błąd podczas wyszukiwania modułu:\n{message}")
+        play_sound("error")
 
     def _stop_detect_ui(self):
         self.detect_progress.setVisible(False)
@@ -2470,6 +2506,7 @@ class CodingPanel(QWidget):
         changes = self._current_changes()
         if not changes:
             QMessageBox.information(self, "Eksport", "Brak zmian do eksportu.")
+            play_sound("info")
             return
 
         if extension.upper() == ".MAN":
@@ -2518,6 +2555,7 @@ class CodingPanel(QWidget):
             export_path.write_text(content_after, encoding="utf-8", newline="")
         except Exception as exc:
             QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać pliku:\n{exc}")
+            play_sound("error")
             return
 
         if self._db and self._current_model and self._current_module:
@@ -2547,11 +2585,13 @@ class CodingPanel(QWidget):
         self._render_table()
 
         QMessageBox.information(self, "Eksport", f"Zapisano do:\n{export_path}")
+        play_sound("success")
 
     def open_history_dialog(self):
         versions, history_rows, current_vin = self._build_history_versions()
         if len(history_rows) < 1 and not self._current_baseline_content():
             QMessageBox.information(self, "Historia", "Brak danych do porównania.")
+            play_sound("info")
             return
 
         dialog = HistoryCompareDialog(

@@ -40,6 +40,33 @@ try:
 except Exception:
     CODING_AVAILABLE = False
 
+try:
+    import winsound
+except Exception:
+    winsound = None
+
+
+def play_sound(sound_type: str = "success") -> None:
+    """Gra dźwięk systemowy dla danego typu akcji."""
+    if winsound is None:
+        return
+
+    try:
+        if sound_type == "success":
+            for freq, duration in [(800, 100), (1000, 100)]:
+                winsound.Beep(freq, duration)
+        elif sound_type == "error":
+            for freq, duration in [(400, 150), (300, 150), (400, 150)]:
+                winsound.Beep(freq, duration)
+        elif sound_type == "warning":
+            for freq, duration in [(600, 100), (800, 100), (600, 100)]:
+                winsound.Beep(freq, duration)
+        elif sound_type == "info":
+            winsound.Beep(1200, 80)
+    except Exception:
+        pass
+
+
 
 class TranslationWorker(QThread):
     translationFinished = pyqtSignal(str, str, str, str, str)
@@ -1967,6 +1994,7 @@ class MainWindow(QMainWindow):
                         pass
                 except Exception as exc:
                     QMessageBox.critical(self, "Błąd", f"Nie udało się wyczyścić pliku:\n{exc}")
+                    play_sound("error")
                     event.ignore()
                     return
 
