@@ -3,3 +3,5 @@ __pycache__/
 test.py
 .cpython-*.pyc
 __pycache__/database.cpython-314.pyc
+/dist
+/build
