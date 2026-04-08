@@ -1,9 +1,3 @@
-"""
-main_window.py
-Główne okno aplikacji BimmerDaten w PyQt6.
-Styl: Windows 98/2000 — pasuje do epoki EDIABAS 😄
-"""
-
 import sys
 import platform
 import json
@@ -18,8 +12,8 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QHeaderView, QTabWidget, QTableWidget,
     QTableWidgetItem, QDialog, QTextBrowser, QMessageBox
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread
-from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
+from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap
 
 # Import naszego dekodera
 try:
@@ -1566,6 +1560,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self.setStyleSheet(WIN98_STYLE)
+        QTimer.singleShot(0, self._run_startup_guard)
 
     def _detect_inpa_path(self) -> str | None:
         for candidate in [
@@ -1614,8 +1609,114 @@ class MainWindow(QMainWindow):
             icon = QIcon(str(icon_path))
             self.setWindowIcon(icon)
 
+    def _resolve_startup_paths(self) -> dict:
+        config_path = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
+        defaults = {
+            "daten_path": r"C:\NCSEXPER\DATEN",
+            "trc_path": r"C:\NCSEXPER\WORK\FSW_PSW.TRC",
+            "translations_path": r"C:\NCS Dummy\Translations.csv",
+            "work_path": r"C:\NCSEXPER\WORK",
+        }
+
+        if not config_path.exists():
+            return defaults
+
+        try:
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+        except Exception:
+            return defaults
+
+        daten_path = str(payload.get("daten_path") or defaults["daten_path"]).strip() or defaults["daten_path"]
+        trc_path = str(payload.get("trc_path") or defaults["trc_path"]).strip() or defaults["trc_path"]
+        translations_path = (
+            str(payload.get("translations_path") or defaults["translations_path"]).strip()
+            or defaults["translations_path"]
+        )
+        work_path = str(Path(trc_path).parent) if trc_path else defaults["work_path"]
+
+        return {
+            "daten_path": daten_path,
+            "trc_path": trc_path,
+            "translations_path": translations_path,
+            "work_path": work_path,
+        }
+
+    def _build_startup_report(self) -> tuple[str, bool]:
+        paths = self._resolve_startup_paths()
+        required_checks = [
+            ("DATEN folder", paths["daten_path"]),
+            ("TRC file", paths["trc_path"]),
+            ("Translations.csv", paths["translations_path"]),
+            ("WORK folder", paths["work_path"]),
+        ]
+        optional_checks = [
+            ("INPA folder", self._inpa_path),
+            ("EDIABAS ECU folder", self._ecu_path),
+            ("Database file", str(Path(__file__).resolve().parent / "data" / "database.db")),
+        ]
+
+        lines: list[str] = []
+        lines.append("BimmerDaten startup report")
+        lines.append("")
+        lines.append("Required for full coding flow:")
+
+        missing_required: list[str] = []
+        for label, raw_path in required_checks:
+            target = (raw_path or "").strip()
+            exists = bool(target) and Path(target).exists()
+            status = "OK" if exists else "MISSING"
+            lines.append(f"- [{status}] {label}: {target or 'not set'}")
+            if not exists:
+                missing_required.append(label)
+
+        lines.append("")
+        lines.append("Optional / feature-specific:")
+        for label, raw_path in optional_checks:
+            target = (raw_path or "").strip()
+            exists = bool(target) and Path(target).exists()
+            status = "OK" if exists else "MISSING"
+            lines.append(f"- [{status}] {label}: {target or 'not set'}")
+
+        lines.append("")
+        lines.append("Python modules:")
+        lines.append(f"- [{'OK' if DECODER_AVAILABLE else 'MISSING'}] decoderPrg")
+        lines.append(f"- [{'OK' if DB_AVAILABLE else 'MISSING'}] database")
+        lines.append(f"- [{'OK' if CODING_AVAILABLE else 'MISSING'}] trc_coding")
+        lines.append(f"- [{'OK' if SA_OPTIONS_AVAILABLE else 'MISSING'}] sa_options_widget")
+
+        report_text = "\n".join(lines)
+        return report_text, bool(missing_required)
+
+    def _show_startup_report(self, force_show: bool = False):
+        report_text, has_missing_required = self._build_startup_report()
+
+        if not force_show and not has_missing_required:
+            return
+
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Startup Guard")
+        dialog.setIcon(QMessageBox.Icon.Warning if has_missing_required else QMessageBox.Icon.Information)
+        if has_missing_required:
+            dialog.setText("Wykryto brak wymaganych plików/ścieżek dla pełnego trybu kodowania.")
+            dialog.setInformativeText("Uzupełnij ścieżki w konfiguracji, aby odblokować wszystkie funkcje.")
+        else:
+            dialog.setText("Wszystkie wymagane ścieżki są dostępne.")
+            dialog.setInformativeText("Raport środowiska poniżej.")
+        dialog.setDetailedText(report_text)
+        dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
+        dialog.exec()
+
+    def _run_startup_guard(self):
+        _report_text, has_missing_required = self._build_startup_report()
+        if has_missing_required:
+            self.status_bar.showMessage("Startup Guard: brakuje części wymaganych plików/ścieżek (szczegóły w raporcie).")
+            self._show_startup_report(force_show=True)
+            return
+
+        self.status_bar.showMessage("Startup Guard: wymagane pliki/ścieżki OK.")
+
     def _setup_ui(self):
-        self.setWindowTitle("BimmerDaten - EDIABAS and NCS Expert")
+        self.setWindowTitle("BimmerDaten - Expert for EDIABAS and NCS")
         self.setMinimumSize(900, 600)
         self.resize(1100, 700)
 
@@ -1624,6 +1725,40 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
+
+        welcome_bar = QWidget()
+        welcome_bar.setStyleSheet("background-color: #000080; border-bottom: 1px solid #808080;")
+        welcome_layout = QHBoxLayout(welcome_bar)
+        welcome_layout.setContentsMargins(8, 4, 8, 4)
+        welcome_layout.setSpacing(8)
+
+        logo_label = QLabel()
+        logo_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
+        logo_pixmap = QPixmap(str(logo_path)) if logo_path.exists() else QPixmap()
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(
+                logo_pixmap.scaled(
+                    24,
+                    24,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            logo_label.setFixedSize(24, 24)
+        else:
+            logo_label.setText("BD")
+            logo_label.setStyleSheet(
+                "color: #ffffff; font-weight: bold; border: 1px solid #ffffff; "
+                "padding: 2px 6px; min-width: 24px;"
+            )
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        welcome_layout.addWidget(logo_label)
+
+        welcome_text = QLabel("Hello Bimmers | BimmerDaten - Expert for EDIABAS and NCS")
+        welcome_text.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
+        welcome_layout.addWidget(welcome_text, 1)
+
+        main_layout.addWidget(welcome_bar)
 
         self.top_tabs = QTabWidget()
         self.top_tabs.tabBar().setStyleSheet(
@@ -1746,6 +1881,9 @@ class MainWindow(QMainWindow):
 
         # Menu Pomoc
         help_menu = menubar.addMenu("Pomoc")
+        report_action = QAction("Raport startup guard", self)
+        report_action.triggered.connect(lambda: self._show_startup_report(force_show=True))
+        help_menu.addAction(report_action)
         about_action = QAction("O programie", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
