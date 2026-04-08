@@ -1,11 +1,11 @@
 <h1 align="center">BimmerDaten</h1>
 <p align="center"><em>Expert for EDIABAS and NCS</em></p>
 <p align="center">
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![Version](https://img.shields.io/badge/Version-1.0-green)
-![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey)
-![BMW Standard Tools required](https://img.shields.io/badge/BMW%20Standard%20Tools-required-orange)
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"/></a>
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue"/>
+  <img src="https://img.shields.io/badge/Version-1.0-green"/>
+  <img src="https://img.shields.io/badge/Platform-Windows-lightgrey"/>
+  <img src="https://img.shields.io/badge/BMW%20Standard%20Tools-required-orange"/>
 </p>
 
 ## Overview
