@@ -10,32 +10,27 @@
 
 ## Overview
 
-BimmerDaten is a Windows GUI tool for viewing, editing, and decoding BMW NCS Expert coding files and EDIABAS job files. It simplifies BMW ECU coding by replacing the cryptic NCS Expert and NCS Dummy workflow with a clean, modern interface. The application is built with Python and PyQt6.
+BimmerDaten is a Windows GUI tool for viewing, editing, and decoding BMW NCS Expert coding files and EDIABAS job files. It simplifies BMW ECU (modules) coding by replacing the cryptic NCS Expert workflow with a clean, modern interface. The application is built with Python and PyQt6.
 
-## Features
+## What it can do ?
 
-- FSW/PSW TRC viewer and editor with change tracking.
-- NCS DATEN parser for .Cxx modules and option/value mapping.
+- Simplifies coding ECU (FSW/PSW.TRC fles) witch change tracking.
+- User friendly viewer for jobs used in Tool32 and INPA.
 - Automatic module detection from loaded TRC content.
-- Translation support using NCS Dummy Translations.csv.
-- TRC and MAN export flow with confirmation and notes.
+- Translation for coding names and parameters (NCS), jobs (Tool32/INPA) using offline DB (failover to online transaltions) and FA codes (online translations). Online transaltions that have been done in past are saved in DB.
 - Coding history storage, comparison, and filtering.
 - PDF export of coding comparison/history reports.
-- EDIABAS .PRG decoder with jobs, tables, and disassembly views.
 - INPA model parser with script-to-PRG discovery.
 - FA/SA decoder for AT.000 and fa.trc data.
 
 ## Requirements
 
-- Windows (32-bit EDIABAS compatibility layer)
+- Windows 10
 - Python 3.10+
-- BMW Standard Tools (NCS Expert, EDIABAS)
-- NCS Dummy (optional but recommended; required for parameter translations)
+- BMW Standard Tools (NCS Expert, EDIABAS, Tool32 etc. like Mike's Easy BMW Tools)
+- NCS Dummy (optional but recommended; required for parameter translations in modules coding (NCS))
 
 Point BimmerDaten to your local Translations.csv in Settings.
-
-Download NCS Dummy:
-https://forums.bimmerforums.com/forum/showthread.php?t=1553779
 
 ## Installation
 
@@ -46,10 +41,8 @@ python main_window.py
 
 ## Usage
 
-1. Open or select your BMW model/module data.
-2. Load a TRC file.
-3. Review and edit coding options.
-4. Export changes to MAN/TRC and apply them in your standard BMW workflow.
+### A manual for BimmerDaten is available in this repo /help/MANUAL_EN.pdf
+### The manual is still in development !
 
 ## Disclaimer
 

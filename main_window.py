@@ -562,6 +562,32 @@ class JobDetailPanel(QWidget):
         self.job_comment_label.setTextFormat(Qt.TextFormat.RichText)
         comment_layout.addWidget(self.job_comment_label)
 
+        self.args_label = QLabel("Argumenty (wejście):")
+        self.args_label.setStyleSheet(
+            "font-size: 9px; color: #555555; font-weight: bold;"
+        )
+        comment_layout.addWidget(self.args_label)
+
+        self.args_table = QTableWidget()
+        self.args_table.setColumnCount(3)
+        self.args_table.setHorizontalHeaderLabels(["Argument", "Typ", "Opis"])
+        self.args_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.args_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.args_table.setMinimumHeight(80)
+        self.args_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.args_table.horizontalHeader().setStretchLastSection(True)
+        self.args_table.hide()
+        self.args_label.hide()
+        comment_layout.addWidget(self.args_table)
+
+        self.results_label = QLabel("Wyniki (wyjście):")
+        self.results_label.setStyleSheet(
+            "font-size: 9px; color: #555555; font-weight: bold;"
+        )
+        comment_layout.addWidget(self.results_label)
+
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(3)
         self.results_table.setHorizontalHeaderLabels(["Wynik", "Typ", "Opis"])
@@ -591,14 +617,10 @@ class JobDetailPanel(QWidget):
         params_widget = QWidget()
         params_layout = QVBoxLayout(params_widget)
 
-        self.params_tree = QTreeWidget()
-        self.params_tree.setHeaderLabels([
-            "Nazwa", "Bajt", "Typ", "Jedn.", "FACT_A", "FACT_B", "Telegram DS2"
-        ])
-        self.params_tree.header().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents
-        )
-        params_layout.addWidget(self.params_tree)
+        self.params_tree = None
+        self.params_sub_tabs = QTabWidget()
+        self.params_sub_tabs.setTabPosition(QTabWidget.TabPosition.North)
+        params_layout.addWidget(self.params_sub_tabs)
         self.tabs.addTab(params_widget, "📊 Parametry")
 
         # --- Zakładka: Disassembly ---
@@ -635,9 +657,22 @@ class JobDetailPanel(QWidget):
 
         # Komentarze
         comments = [c for c in job.comments if not c.startswith("JOBNAME:")]
-        job_comment, result_rows = self._parse_job_comments(comments)
+        job_comment, result_rows, arg_rows = self._parse_job_comments(comments)
         self._current_comments_de = job_comment or "Brak komentarzy."
         self.job_comment_label.setText(self._current_comments_de)
+
+        self.args_table.setRowCount(len(arg_rows))
+        for row_index, (arg_name, arg_type, arg_comment) in enumerate(arg_rows):
+            self.args_table.setItem(row_index, 0, QTableWidgetItem(arg_name))
+            self.args_table.setItem(row_index, 1, QTableWidgetItem(arg_type))
+            self.args_table.setItem(row_index, 2, QTableWidgetItem(arg_comment))
+        if arg_rows:
+            self.args_label.show()
+            self.args_table.show()
+            self.args_table.resizeColumnsToContents()
+        else:
+            self.args_table.hide()
+            self.args_label.hide()
 
         self.results_table.setRowCount(len(result_rows))
         for row_index, (result_name, result_type, result_comment) in enumerate(result_rows):
@@ -650,7 +685,7 @@ class JobDetailPanel(QWidget):
         self._refresh_translation()
 
         # Parametry z BETRIEBSWTAB
-        self._load_params(job, tables)
+        self._load_params(job, tables, self._db)
 
         # Disassembly
         self.dis_text.setPlainText(
@@ -817,12 +852,16 @@ class JobDetailPanel(QWidget):
         self._start_translation_worker(prg_file, job_name, text_de, lang)
         return text_de, False
 
-    def _parse_job_comments(self, comments: list[str]) -> tuple[str, list[tuple[str, str, str]]]:
+    def _parse_job_comments(self, comments: list[str]) -> tuple[str, list[tuple[str, str, str]], list[tuple[str, str, str]]]:
         job_comment = ""
         results: list[tuple[str, str, str]] = []
+        args: list[tuple[str, str, str]] = []
         current_result = ""
         current_type = ""
         current_comment = ""
+        current_arg = ""
+        current_arg_type = ""
+        current_arg_comments: list[str] = []
 
         def flush_result():
             nonlocal current_result, current_type, current_comment
@@ -832,12 +871,29 @@ class JobDetailPanel(QWidget):
             current_type = ""
             current_comment = ""
 
+        def flush_arg():
+            nonlocal current_arg, current_arg_type, current_arg_comments
+            if current_arg:
+                args.append((current_arg, current_arg_type, " | ".join(comment for comment in current_arg_comments if comment)))
+            current_arg = ""
+            current_arg_type = ""
+            current_arg_comments = []
+
         for entry in comments:
             line = entry.strip()
             upper = line.upper()
             if upper.startswith("JOBCOMMENT:"):
                 job_comment = line.split(":", 1)[1].strip()
+            elif upper.startswith("ARG:"):
+                flush_arg()
+                flush_result()
+                current_arg = line.split(":", 1)[1].strip()
+            elif upper.startswith("ARGTYPE:"):
+                current_arg_type = line.split(":", 1)[1].strip()
+            elif upper.startswith("ARGCOMMENT:"):
+                current_arg_comments.append(line.split(":", 1)[1].strip())
             elif upper.startswith("RESULT:"):
+                flush_arg()
                 flush_result()
                 current_result = line.split(":", 1)[1].strip()
             elif upper.startswith("RESULTTYPE:"):
@@ -845,8 +901,9 @@ class JobDetailPanel(QWidget):
             elif upper.startswith("RESULTCOMMENT:"):
                 current_comment = line.split(":", 1)[1].strip()
 
+        flush_arg()
         flush_result()
-        return job_comment, results
+        return job_comment, results, args
 
     def _set_translation_state(self, state: str):
         if state == "missing":
@@ -873,77 +930,190 @@ class JobDetailPanel(QWidget):
             "font-weight: bold;"
         )
 
-    def _load_params(self, job: "Job", tables: list["Table"]):
-        self.params_tree.clear()
+    def _load_params(self, job: "Job", tables: list["Table"], db: "Database | None" = None):
+        while self.params_sub_tabs.count():
+            page = self.params_sub_tabs.widget(0)
+            self.params_sub_tabs.removeTab(0)
+            if page is not None:
+                page.deleteLater()
+        self.params_tree = None
 
-        # Szukamy tabeli BETRIEBSWTAB
-        betrieb = None
-        for table in tables:
-            if "BETRIEBSWTAB" in table.name.upper():
-                betrieb = table
-                break
+        def build_generic_table_tab(table: "Table") -> QWidget:
+            page = QWidget()
+            layout = QVBoxLayout(page)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(4)
 
-        if not betrieb:
-            item = QTreeWidgetItem(["Plik .prg nie zawiera tabeli BETRIEBSWTAB", "", "", "", "", ""])
-            self.params_tree.addTopLevelItem(item)
+            filter_row = QHBoxLayout()
+            filter_row.addWidget(QLabel("Filtr:"))
+            filter_edit = QLineEdit()
+            filter_edit.setPlaceholderText("Szukaj po wartościach tabeli...")
+            filter_row.addWidget(filter_edit)
+            layout.addLayout(filter_row)
+
+            table_widget = QTableWidget()
+            table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            table_widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            table_widget.setAlternatingRowColors(False)
+            table_widget.horizontalHeader().setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
+            table_widget.horizontalHeader().setStretchLastSection(True)
+            layout.addWidget(table_widget)
+
+            columns = list(getattr(table, "columns", []) or [])
+            rows = list(getattr(table, "rows", []) or [])
+            row_values = [[str(value) for value in getattr(row, "values", [])] for row in rows]
+
+            table_widget.setColumnCount(len(columns))
+            table_widget.setHorizontalHeaderLabels(columns)
+
+            def apply_filter():
+                query = filter_edit.text().strip().upper()
+                visible_rows = []
+                for values in row_values:
+                    haystack = " ".join(values).upper()
+                    if query and query not in haystack:
+                        continue
+                    visible_rows.append(values)
+
+                table_widget.setRowCount(len(visible_rows))
+                for row_index, values in enumerate(visible_rows):
+                    for col_index in range(len(columns)):
+                        cell_text = values[col_index] if col_index < len(values) else ""
+                        table_widget.setItem(row_index, col_index, QTableWidgetItem(cell_text))
+
+                table_widget.resizeColumnsToContents()
+
+            filter_edit.textChanged.connect(lambda _text: apply_filter())
+            apply_filter()
+            return page
+
+        def build_betriebs_tab(table: "Table") -> QWidget:
+            page = QWidget()
+            layout = QVBoxLayout(page)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(4)
+
+            tree = QTreeWidget()
+            tree.setHeaderLabels([
+                "Nazwa", "Bajt", "Typ", "Jedn.", "FACT_A", "FACT_B", "Telegram DS2"
+            ])
+            tree.header().setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
+            layout.addWidget(tree)
+
+            cols = [c.upper() for c in table.columns]
+
+            def col(name):
+                try:
+                    return cols.index(name.upper())
+                except ValueError:
+                    return -1
+
+            idx_name = col("NAME")
+            if idx_name == -1:
+                layout.removeWidget(tree)
+                tree.deleteLater()
+                self.params_tree = None
+                return build_generic_table_tab(table)
+
+            self.params_tree = tree
+
+            idx_tel = col("TELEGRAM")
+            idx_byte = col("BYTE")
+            idx_dtype = col("DATA_TYPE")
+            idx_meas = col("MEAS")
+            idx_facta = col("FACT_A")
+            idx_factb = col("FACT_B")
+
+            def get_val(row, idx):
+                if idx == -1 or idx >= len(row.values):
+                    return "—"
+                return row.values[idx].strip()
+
+            param_names = self._extract_param_names_from_disassembly(job.disassembly)
+
+            if not param_names:
+                item = QTreeWidgetItem(
+                    ["Brak danych live data — job zwraca status tekstowy lub wykonuje akcję", "", "", "", "", "", ""]
+                )
+                tree.addTopLevelItem(item)
+                return page
+
+            found = False
+            for row in table.rows:
+                row_name = get_val(row, idx_name).upper().strip()
+                if row_name not in param_names:
+                    continue
+                found = True
+                name = get_val(row, idx_name)
+                byte_ = get_val(row, idx_byte)
+                dtype = get_val(row, idx_dtype)
+                meas = get_val(row, idx_meas)
+                facta = get_val(row, idx_facta)
+                factb = get_val(row, idx_factb)
+                raw_tel = get_val(row, idx_tel).upper().replace(" ", "")
+                tel_fmt = self._format_telegram(raw_tel)
+                item = QTreeWidgetItem([name, byte_, dtype, meas, facta, factb, tel_fmt])
+                tree.addTopLevelItem(item)
+
+            if not found:
+                item = QTreeWidgetItem(
+                    ["Brak danych live data — job zwraca status tekstowy lub wykonuje akcję", "", "", "", "", "", ""]
+                )
+                tree.addTopLevelItem(item)
+
+            return page
+
+        if not tables:
+            placeholder = QWidget()
+            self.params_sub_tabs.addTab(placeholder, "Plik .prg nie zawiera tabel")
+            self.params_sub_tabs.setTabEnabled(0, False)
             return
 
-        # Znajdź indeksy kolumn
-        cols = [c.upper() for c in betrieb.columns]
-        def col(name):
-            try:
-                return cols.index(name.upper())
-            except ValueError:
-                return -1
+        tables_sorted = sorted(
+            tables,
+            key=lambda table: 0 if self._table_used_in_job(table.name, job.disassembly) else 1,
+        )
 
-        idx_name    = col("NAME")
-        idx_tel     = col("TELEGRAM")
-        idx_byte    = col("BYTE")
-        idx_dtype   = col("DATA_TYPE")
-        idx_meas    = col("MEAS")
-        idx_facta   = col("FACT_A")
-        idx_factb   = col("FACT_B")
+        for table in tables_sorted:
+            used = self._table_used_in_job(table.name, job.disassembly)
+            tab_title = f"{'🟢' if used else '🔴'} {table.name}"
+            if "BETRIEBSWTAB" in table.name.upper() and used:
+                page = build_betriebs_tab(table)
+            else:
+                page = build_generic_table_tab(table)
+            self.params_sub_tabs.addTab(page, tab_title)
+            if db is not None:
+                desc = db.get_table_description(table.name)
+            else:
+                desc = None
 
-        def get_val(row, idx):
-            if idx == -1 or idx >= len(row.values):
-                return "—"
-            return row.values[idx].strip()
+            if desc:
+                name_en, description_en = desc
+                tooltip = f"<b>{name_en}</b><br>{description_en}"
+            else:
+                tooltip = "No description available for this table."
+            tab_index = self.params_sub_tabs.count() - 1
+            self.params_sub_tabs.setTabToolTip(tab_index, tooltip)
+            self.params_sub_tabs.tabBar().setTabToolTip(tab_index, tooltip)
 
-        # Wyciągnij nazwy parametrów z disassembly
-        # Job robi: move S1,"NMOT_W" → tabseek "NAME",S1
-        # czyli szuka w BETRIEBSWTAB po NAME = "NMOT_W"
-        param_names = self._extract_param_names_from_disassembly(job.disassembly)
+        if self.params_sub_tabs.count() > 0:
+            self.params_sub_tabs.setCurrentIndex(0)
 
-        if not param_names:
-            item = QTreeWidgetItem(
-                ["Brak danych live data — job zwraca status tekstowy lub wykonuje akcję", "", "", "", "", "", ""]
-            )
-            self.params_tree.addTopLevelItem(item)
-            return
+    def _table_used_in_job(self, table_name: str, disassembly: list[str]) -> bool:
+        needle = (table_name or "").lower()
+        if not needle:
+            return False
 
-        # Dopasuj wiersze BETRIEBSWTAB przez kolumnę NAME
-        found = False
-        for row in betrieb.rows:
-            row_name = get_val(row, idx_name).upper().strip()
-            if row_name not in param_names:
-                continue
-            found = True
-            name  = get_val(row, idx_name)
-            byte_ = get_val(row, idx_byte)
-            dtype = get_val(row, idx_dtype)
-            meas  = get_val(row, idx_meas)
-            facta = get_val(row, idx_facta)
-            factb = get_val(row, idx_factb)
-            raw_tel = get_val(row, idx_tel).upper().replace(" ", "")
-            tel_fmt = self._format_telegram(raw_tel)
-            item = QTreeWidgetItem([name, byte_, dtype, meas, facta, factb, tel_fmt])
-            self.params_tree.addTopLevelItem(item)
+        for line in disassembly:
+            lower_line = line.lower()
+            if ("tabset" in lower_line or "tabseek" in lower_line) and needle in lower_line:
+                return True
 
-        if not found:
-            item = QTreeWidgetItem(
-                ["Brak danych live data — job zwraca status tekstowy lub wykonuje akcję", "", "", "", "", "", ""]
-            )
-            self.params_tree.addTopLevelItem(item)
+        return False
 
     def _extract_param_names_from_disassembly(self, disassembly: list[str]) -> set[str]:
         """
@@ -1004,9 +1174,19 @@ class JobDetailPanel(QWidget):
         self.job_addr_label.setText("Adres: —")
         self.job_category_label.setText("Kategoria: —")
         self.job_comment_label.setText("Opis: —")
+        self.args_table.setRowCount(0)
+        self.args_table.hide()
+        self.args_label.hide()
         self.results_table.setRowCount(0)
         self._set_translation_state("idle")
-        self.params_tree.clear()
+        if self.params_tree is not None:
+            self.params_tree.clear()
+        while self.params_sub_tabs.count():
+            page = self.params_sub_tabs.widget(0)
+            self.params_sub_tabs.removeTab(0)
+            if page is not None:
+                page.deleteLater()
+        self.params_tree = None
         self.dis_text.clear()
 
 
