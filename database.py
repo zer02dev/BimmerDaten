@@ -180,11 +180,12 @@ class Database:
             """,
             rows,
         )
+        self.conn.commit()
 
     def get_table_description(self, table_name: str) -> tuple[str, str] | None:
         row = self.conn.execute(
-            "SELECT name_en, description_en FROM table_descriptions WHERE table_name = ?",
-            (table_name.upper(),),
+            "SELECT name_en, description_en FROM table_descriptions WHERE UPPER(table_name) = UPPER(?)",
+            (table_name,),
         ).fetchone()
         return (row["name_en"], row["description_en"]) if row else None
 

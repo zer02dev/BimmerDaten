@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import (
     QLineEdit, QListWidget, QListWidgetItem, QTreeWidget,
     QTreeWidgetItem, QFileDialog, QStatusBar, QMenuBar,
     QMenu, QGroupBox, QTextEdit, QComboBox, QFrame,
-    QSizePolicy, QHeaderView, QTabWidget, QTableWidget,
-    QTableWidgetItem, QDialog, QTextBrowser, QMessageBox
+    QSizePolicy, QHeaderView, QTabWidget, QTabBar, QTableWidget,
+    QTableWidgetItem, QDialog, QTextBrowser, QMessageBox, QToolButton
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap
@@ -938,11 +938,91 @@ class JobDetailPanel(QWidget):
                 page.deleteLater()
         self.params_tree = None
 
+        def _description_payload(table_name: str) -> tuple[str, str] | None:
+            if db is not None:
+                desc = db.get_table_description(table_name)
+            else:
+                desc = None
+
+            if desc:
+                return desc
+            return None
+
+        def _description_tooltip(desc: tuple[str, str] | None) -> str:
+            if desc:
+                return f"<b>{desc[0]}</b><br>{desc[1]}"
+            return "No description available for this table."
+
+        def _show_table_desc_popup(table_name: str, desc: tuple[str, str] | None):
+            dlg = QDialog(self)
+            dlg.setWindowTitle(f"Table: {table_name}")
+            dlg.setMinimumWidth(420)
+            dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+
+            layout = QVBoxLayout(dlg)
+            layout.setContentsMargins(0, 0, 0, 12)
+            layout.setSpacing(0)
+
+            header = QLabel(f"  {table_name}")
+            header.setStyleSheet(
+                "background-color: #1a3a5c; color: white;"
+                "font-family: 'Tahoma'; font-size: 12px; font-weight: bold;"
+                "padding: 8px 10px;"
+            )
+            layout.addWidget(header)
+
+            content_layout = QVBoxLayout()
+            content_layout.setContentsMargins(14, 12, 14, 0)
+            content_layout.setSpacing(6)
+
+            if desc:
+                name_label = QLabel(desc[0])
+                name_label.setStyleSheet("font-weight: bold; font-size: 11px; color: #1a3a5c;")
+                name_label.setWordWrap(True)
+                content_layout.addWidget(name_label)
+
+                desc_label = QLabel(desc[1])
+                desc_label.setWordWrap(True)
+                desc_label.setStyleSheet("font-size: 10px; color: #333;")
+                content_layout.addWidget(desc_label)
+            else:
+                no_data = QLabel("No description available for this table.")
+                no_data.setStyleSheet("font-size: 10px; color: #888; font-style: italic;")
+                content_layout.addWidget(no_data)
+
+            layout.addLayout(content_layout)
+
+            ok_btn = QPushButton("OK")
+            ok_btn.setFixedWidth(80)
+            ok_btn.clicked.connect(dlg.accept)
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            btn_row.addWidget(ok_btn)
+            btn_row.setContentsMargins(0, 8, 14, 0)
+            layout.addLayout(btn_row)
+
+            dlg.exec()
+
+        def _add_title_row(layout: QVBoxLayout, table_name: str):
+            title_row = QHBoxLayout()
+            title_row.setContentsMargins(0, 0, 0, 0)
+            title_row.setSpacing(0)
+
+            title_label = QLabel(table_name)
+            title_label.setStyleSheet(
+                "font-size: 9px; color: #555555; font-weight: bold;"
+            )
+            title_row.addWidget(title_label)
+            layout.addLayout(title_row)
+
         def build_generic_table_tab(table: "Table") -> QWidget:
+            desc = _description_payload(table.name)
             page = QWidget()
             layout = QVBoxLayout(page)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(4)
+
+            _add_title_row(layout, table.name)
 
             filter_row = QHBoxLayout()
             filter_row.addWidget(QLabel("Filtr:"))
@@ -990,10 +1070,13 @@ class JobDetailPanel(QWidget):
             return page
 
         def build_betriebs_tab(table: "Table") -> QWidget:
+            desc = _description_payload(table.name)
             page = QWidget()
             layout = QVBoxLayout(page)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(4)
+
+            _add_title_row(layout, table.name)
 
             tree = QTreeWidget()
             tree.setHeaderLabels([
@@ -1081,24 +1164,43 @@ class JobDetailPanel(QWidget):
         for table in tables_sorted:
             used = self._table_used_in_job(table.name, job.disassembly)
             tab_title = f"{'🟢' if used else '🔴'} {table.name}"
+            desc = _description_payload(table.name)
+            tooltip_html = _description_tooltip(desc)
             if "BETRIEBSWTAB" in table.name.upper() and used:
                 page = build_betriebs_tab(table)
             else:
                 page = build_generic_table_tab(table)
             self.params_sub_tabs.addTab(page, tab_title)
-            if db is not None:
-                desc = db.get_table_description(table.name)
-            else:
-                desc = None
-
-            if desc:
-                name_en, description_en = desc
-                tooltip = f"<b>{name_en}</b><br>{description_en}"
-            else:
-                tooltip = "No description available for this table."
             tab_index = self.params_sub_tabs.count() - 1
-            self.params_sub_tabs.setTabToolTip(tab_index, tooltip)
-            self.params_sub_tabs.tabBar().setTabToolTip(tab_index, tooltip)
+            self.params_sub_tabs.setTabToolTip(tab_index, tooltip_html)
+            self.params_sub_tabs.tabBar().setTabToolTip(tab_index, tooltip_html)
+
+        for tab_index, table in enumerate(tables_sorted):
+            desc = _description_payload(table.name)
+            button = QToolButton()
+            button.setText("?")
+            button.setFixedSize(QSize(16, 16))
+            button.setStyleSheet(
+                "QToolButton {"
+                "  font-size: 9px; font-weight: bold;"
+                "  border: 1px solid #888; border-radius: 8px;"
+                "  background: #ddd; color: #333;"
+                "  padding: 0px;"
+                "}"
+                "QToolButton:hover { background: #bbb; }"
+            )
+            button.setToolTip(_description_tooltip(desc))
+
+            def make_handler(tname: str, tdesc: tuple[str, str] | None):
+                def handler():
+                    _show_table_desc_popup(tname, tdesc)
+
+                return handler
+
+            button.clicked.connect(make_handler(table.name, desc))
+            self.params_sub_tabs.tabBar().setTabButton(
+                tab_index, QTabBar.ButtonPosition.RightSide, button
+            )
 
         if self.params_sub_tabs.count() > 0:
             self.params_sub_tabs.setCurrentIndex(0)
