@@ -147,44 +147,19 @@ class Database:
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS table_descriptions (
-                table_name      TEXT PRIMARY KEY,
-                name_en         TEXT NOT NULL DEFAULT '',
-                description_en  TEXT NOT NULL DEFAULT ''
+                table_name     TEXT PRIMARY KEY,
+                name_en        TEXT NOT NULL DEFAULT '',
+                description_en TEXT NOT NULL DEFAULT ''
             );
             """
-        )
-
-        rows = [
-            ("JOBRESULT", "Job Result Codes", "Standard status codes returned by all jobs: OKAY, BUSY, ERROR_ECU_REJECTED, ERROR_ECU_PARAMETER, etc."),
-            ("LIEFERANTEN", "Supplier List", "List of ECU hardware manufacturers/suppliers (Bosch, Siemens, Hella, Delphi, etc.) used across all modules"),
-            ("FORTTEXTE", "Progress Texts", "Standard text strings for diagnostic progress and status reporting"),
-            ("FARTTEXTE", "Color/State Texts", "Text labels for colors and operational states"),
-            ("BETRIEBSWTAB", "Live Data Parameter Table", "Defines all live data parameters readable from this ECU: byte position, data type, measurement unit, scaling factors (FACT_A/B), and DS2 telegram bytes"),
-            ("FDETAILSTRUKTUR", "Fault Detail Structure", "Defines the byte structure of fault memory detail records"),
-            ("IDETAILSTRUKTUR", "Info Detail Structure", "Defines the byte structure of info/status detail records"),
-            ("HDETAILSTRUKTUR", "History Detail Structure", "Defines the byte structure of historical fault records"),
-            ("FUMWELTTEXTE", "Fault Environment Texts", "Text descriptions for fault environment (Umwelt) data fields"),
-            ("IUMWELTTEXTE", "Info Environment Texts", "Text descriptions for info environment data fields"),
-            ("KONZEPT_TABELLE", "Diagnostic Concept Table", "Maps diagnostic concepts/modes to their implementation parameters"),
-            ("STEUERN_DIGITAL", "Digital Control Values", "Digital input/output control value definitions"),
-            ("ASCII", "ASCII Lookup Table", "ASCII character mapping table used for string encoding"),
-            ("JOBRESULTEXTENDED", "Extended Job Result Codes", "Extended set of job status codes beyond the standard JOBRESULT set"),
-            ("FUMWELTMATRIX", "Fault Environment Matrix", "Matrix defining which environment data is captured for each fault code"),
-            ("FEHLERTEXT", "Fault Code Texts", "Human-readable text descriptions for diagnostic trouble codes"),
-            ("STATUS_TEXT", "Status Texts", "Text representations of ECU status values"),
-        ]
-        self.conn.executemany(
-            """
-            INSERT OR IGNORE INTO table_descriptions (table_name, name_en, description_en)
-            VALUES (?, ?, ?)
-            """,
-            rows,
         )
         self.conn.commit()
 
     def get_table_description(self, table_name: str) -> tuple[str, str] | None:
         row = self.conn.execute(
-            "SELECT name_en, description_en FROM table_descriptions WHERE UPPER(table_name) = UPPER(?)",
+            """SELECT name_en, description_en
+               FROM table_descriptions
+               WHERE table_name = UPPER(?)""",
             (table_name,),
         ).fetchone()
         return (row["name_en"], row["description_en"]) if row else None

@@ -938,21 +938,6 @@ class JobDetailPanel(QWidget):
                 page.deleteLater()
         self.params_tree = None
 
-        def _description_payload(table_name: str) -> tuple[str, str] | None:
-            if db is not None:
-                desc = db.get_table_description(table_name)
-            else:
-                desc = None
-
-            if desc:
-                return desc
-            return None
-
-        def _description_tooltip(desc: tuple[str, str] | None) -> str:
-            if desc:
-                return f"<b>{desc[0]}</b><br>{desc[1]}"
-            return "No description available for this table."
-
         def _show_table_desc_popup(table_name: str, desc: tuple[str, str] | None):
             dlg = QDialog(self)
             dlg.setWindowTitle(f"Table: {table_name}")
@@ -1016,7 +1001,6 @@ class JobDetailPanel(QWidget):
             layout.addLayout(title_row)
 
         def build_generic_table_tab(table: "Table") -> QWidget:
-            desc = _description_payload(table.name)
             page = QWidget()
             layout = QVBoxLayout(page)
             layout.setContentsMargins(0, 0, 0, 0)
@@ -1070,7 +1054,6 @@ class JobDetailPanel(QWidget):
             return page
 
         def build_betriebs_tab(table: "Table") -> QWidget:
-            desc = _description_payload(table.name)
             page = QWidget()
             layout = QVBoxLayout(page)
             layout.setContentsMargins(0, 0, 0, 0)
@@ -1164,19 +1147,17 @@ class JobDetailPanel(QWidget):
         for table in tables_sorted:
             used = self._table_used_in_job(table.name, job.disassembly)
             tab_title = f"{'🟢' if used else '🔴'} {table.name}"
-            desc = _description_payload(table.name)
-            tooltip_html = _description_tooltip(desc)
             if "BETRIEBSWTAB" in table.name.upper() and used:
                 page = build_betriebs_tab(table)
             else:
                 page = build_generic_table_tab(table)
             self.params_sub_tabs.addTab(page, tab_title)
             tab_index = self.params_sub_tabs.count() - 1
+            tooltip_html = "Click ? for table description."
             self.params_sub_tabs.setTabToolTip(tab_index, tooltip_html)
             self.params_sub_tabs.tabBar().setTabToolTip(tab_index, tooltip_html)
 
         for tab_index, table in enumerate(tables_sorted):
-            desc = _description_payload(table.name)
             button = QToolButton()
             button.setText("?")
             button.setFixedSize(QSize(16, 16))
@@ -1189,15 +1170,16 @@ class JobDetailPanel(QWidget):
                 "}"
                 "QToolButton:hover { background: #bbb; }"
             )
-            button.setToolTip(_description_tooltip(desc))
+            button.setToolTip("Click ? for table description.")
 
-            def make_handler(tname: str, tdesc: tuple[str, str] | None):
+            def make_handler(tname: str, db_ref: "Database | None"):
                 def handler():
-                    _show_table_desc_popup(tname, tdesc)
+                    desc = db_ref.get_table_description(tname) if db_ref else None
+                    _show_table_desc_popup(tname, desc)
 
                 return handler
 
-            button.clicked.connect(make_handler(table.name, desc))
+            button.clicked.connect(make_handler(table.name, self._db))
             self.params_sub_tabs.tabBar().setTabButton(
                 tab_index, QTabBar.ButtonPosition.RightSide, button
             )
