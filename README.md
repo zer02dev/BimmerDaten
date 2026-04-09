@@ -56,7 +56,7 @@ BimmerDaten is not a replacement for BMW Standard Tools — it works alongside t
 - Automatic job categorization (fault memory, live data, coding, identification, etc.)
 
 ### NCS Expert Coding
-- Load and edit FSW/PSW coding files (`.trc`)
+- Load and edit FSW/PSW coding files (`.trc`) then export it to .MAN file to upload it do your Bimmer
 - Human-readable parameter names via NCS Dummy's `Translations.csv`
 - Automatic module detection from TRC content
 - Change tracking — see exactly what you changed vs. the original

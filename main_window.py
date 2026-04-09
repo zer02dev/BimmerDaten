@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem, QFileDialog, QStatusBar, QMenuBar,
     QMenu, QGroupBox, QTextEdit, QComboBox, QFrame,
     QSizePolicy, QHeaderView, QTabWidget, QTabBar, QTableWidget,
-    QTableWidgetItem, QDialog, QTextBrowser, QMessageBox, QToolButton
+    QTableWidgetItem, QDialog, QTextBrowser, QMessageBox, QToolButton,
+    QProgressBar
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap
@@ -2447,6 +2448,114 @@ class MainWindow(QMainWindow):
 # ---------------------------------------------------------------------------
 # Uruchomienie
 
+class SplashScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.SplashScreen
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(480, 260)
+
+        screen = QApplication.primaryScreen().geometry()
+        self.move(
+            (screen.width() - self.width()) // 2,
+            (screen.height() - self.height()) // 2
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        card = QWidget()
+        card.setObjectName("splash_card")
+        card.setStyleSheet(
+            "#splash_card {"
+            "  background-color: #1a1a2e;"
+            "  border-radius: 12px;"
+            "  border: 1px solid #2a2a4e;"
+            "}"
+        )
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(36, 32, 36, 28)
+        card_layout.setSpacing(6)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+
+        icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
+        if icon_path.exists():
+            logo_label = QLabel()
+            pixmap = QPixmap(str(icon_path)).scaled(
+                48, 48,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            logo_label.setPixmap(pixmap)
+            title_row.addWidget(logo_label)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        app_label = QLabel("BimmerDaten")
+        app_label.setStyleSheet(
+            "color: #e0e0ff; font-family: 'Tahoma'; font-size: 22px; font-weight: bold;"
+        )
+        sub_label = QLabel("A modern companion for BMW EDIABAS and NCS Expert")
+        sub_label.setStyleSheet(
+            "color: #7a7aaa; font-family: 'Tahoma'; font-size: 9px;"
+        )
+        title_col.addWidget(app_label)
+        title_col.addWidget(sub_label)
+        title_row.addLayout(title_col)
+        title_row.addStretch()
+
+        card_layout.addLayout(title_row)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #2a2a4e;")
+        card_layout.addSpacing(10)
+        card_layout.addWidget(sep)
+        card_layout.addSpacing(10)
+
+        self.status_label = QLabel("Starting...")
+        self.status_label.setStyleSheet(
+            "color: #9090cc; font-family: 'Tahoma'; font-size: 9px;"
+        )
+        card_layout.addWidget(self.status_label)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)
+        self.progress.setFixedHeight(4)
+        self.progress.setTextVisible(False)
+        self.progress.setStyleSheet(
+            "QProgressBar {"
+            "  background-color: #2a2a4e;"
+            "  border: none;"
+            "  border-radius: 2px;"
+            "}"
+            "QProgressBar::chunk {"
+            "  background-color: #5555cc;"
+            "  border-radius: 2px;"
+            "}"
+        )
+        card_layout.addWidget(self.progress)
+
+        ver_label = QLabel("v1.0")
+        ver_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        ver_label.setStyleSheet(
+            "color: #44446a; font-family: 'Tahoma'; font-size: 8px;"
+        )
+        card_layout.addWidget(ver_label)
+
+        layout.addWidget(card)
+
+    def set_status(self, text: str):
+        self.status_label.setText(text)
+        QApplication.processEvents()
+
 def main():
     if platform.system() == "Windows":
         try:
@@ -2464,8 +2573,25 @@ def main():
     icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
+
+    splash = SplashScreen()
+    splash.show()
+    app.processEvents()
+
+    splash.set_status("Loading modules...")
+    app.processEvents()
+
+    splash.set_status("Initializing database...")
+    app.processEvents()
+
+    splash.set_status("Building interface...")
     window = MainWindow()
+
+    splash.set_status("Ready.")
+    app.processEvents()
+
     window.show()
+    splash.close()
     sys.exit(app.exec())
 
 
