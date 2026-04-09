@@ -2456,8 +2456,8 @@ class SplashScreen(QWidget):
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.SplashScreen
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(480, 260)
+        self.setFixedSize(420, 220)
+        self.setStyleSheet("background-color: #d4d0c8;")
 
         screen = QApplication.primaryScreen().geometry()
         self.move(
@@ -2465,92 +2465,167 @@ class SplashScreen(QWidget):
             (screen.height() - self.height()) // 2
         )
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        # Outer border (Win98 window border effect)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(2, 2, 2, 2)
+        outer.setSpacing(0)
 
-        card = QWidget()
-        card.setObjectName("splash_card")
-        card.setStyleSheet(
-            "#splash_card {"
-            "  background-color: #1a1a2e;"
-            "  border-radius: 12px;"
-            "  border: 1px solid #2a2a4e;"
+        inner = QWidget()
+        inner.setStyleSheet(
+            "QWidget {"
+            "  background-color: #d4d0c8;"
+            "  border-top: 2px solid #ffffff;"
+            "  border-left: 2px solid #ffffff;"
+            "  border-bottom: 2px solid #808080;"
+            "  border-right: 2px solid #808080;"
             "}"
         )
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(36, 32, 36, 28)
-        card_layout.setSpacing(6)
+        outer.addWidget(inner)
 
-        title_row = QHBoxLayout()
-        title_row.setSpacing(12)
+        main_layout = QVBoxLayout(inner)
+        main_layout.setContentsMargins(0, 0, 0, 12)
+        main_layout.setSpacing(0)
+
+        # Title bar (navy, Win98 style)
+        title_bar = QWidget()
+        title_bar.setFixedHeight(24)
+        title_bar.setStyleSheet(
+            "QWidget {"
+            "  background-color: #000080;"
+            "  border: none;"
+            "}"
+        )
+        title_layout = QHBoxLayout(title_bar)
+        title_layout.setContentsMargins(6, 0, 6, 0)
+        title_layout.setSpacing(6)
 
         icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
         if icon_path.exists():
-            logo_label = QLabel()
+            icon_label = QLabel()
+            icon_label.setStyleSheet("border: none; background: transparent;")
             pixmap = QPixmap(str(icon_path)).scaled(
-                48, 48,
+                16, 16,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation
             )
-            logo_label.setPixmap(pixmap)
-            title_row.addWidget(logo_label)
+            icon_label.setPixmap(pixmap)
+            title_layout.addWidget(icon_label)
 
-        title_col = QVBoxLayout()
-        title_col.setSpacing(2)
-        app_label = QLabel("BimmerDaten")
-        app_label.setStyleSheet(
-            "color: #e0e0ff; font-family: 'Tahoma'; font-size: 22px; font-weight: bold;"
+        title_text = QLabel("BimmerDaten")
+        title_text.setStyleSheet(
+            "color: #ffffff;"
+            "font-family: 'Tahoma';"
+            "font-size: 11px;"
+            "font-weight: bold;"
+            "background: transparent;"
+            "border: none;"
         )
-        sub_label = QLabel("A modern companion for BMW EDIABAS and NCS Expert")
-        sub_label.setStyleSheet(
-            "color: #7a7aaa; font-family: 'Tahoma'; font-size: 9px;"
+        title_layout.addWidget(title_text)
+        title_layout.addStretch()
+
+        ver_title = QLabel("v1.0")
+        ver_title.setStyleSheet(
+            "color: #aaaacc;"
+            "font-family: 'Tahoma';"
+            "font-size: 10px;"
+            "background: transparent;"
+            "border: none;"
         )
-        title_col.addWidget(app_label)
-        title_col.addWidget(sub_label)
-        title_row.addLayout(title_col)
-        title_row.addStretch()
+        title_layout.addWidget(ver_title)
 
-        card_layout.addLayout(title_row)
+        main_layout.addWidget(title_bar)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #2a2a4e;")
-        card_layout.addSpacing(10)
-        card_layout.addWidget(sep)
-        card_layout.addSpacing(10)
+        # Content area
+        content = QWidget()
+        content.setStyleSheet("QWidget { border: none; background-color: #d4d0c8; }")
+        content_layout = QHBoxLayout(content)
+        content_layout.setContentsMargins(16, 16, 16, 8)
+        content_layout.setSpacing(16)
+
+        # Logo
+        if icon_path.exists():
+            logo_label = QLabel()
+            logo_label.setStyleSheet("border: none; background: transparent;")
+            pixmap_large = QPixmap(str(icon_path)).scaled(
+                64, 64,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            logo_label.setPixmap(pixmap_large)
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+            logo_label.setFixedWidth(72)
+            content_layout.addWidget(logo_label)
+
+        # Right side: text
+        right_col = QVBoxLayout()
+        right_col.setSpacing(4)
+
+        app_name = QLabel("BimmerDaten")
+        app_name.setStyleSheet(
+            "font-family: 'Tahoma';"
+            "font-size: 18px;"
+            "font-weight: bold;"
+            "color: #000080;"
+            "border: none;"
+            "background: transparent;"
+        )
+        right_col.addWidget(app_name)
+
+        sub_text = QLabel("Expert for EDIABAS and NCS")
+        sub_text.setStyleSheet(
+            "font-family: 'Tahoma';"
+            "font-size: 10px;"
+            "color: #444444;"
+            "border: none;"
+            "background: transparent;"
+        )
+        right_col.addWidget(sub_text)
+
+        right_col.addSpacing(12)
+
+        # Separator line (inset, Win98)
+        sep_widget = QFrame()
+        sep_widget.setFrameShape(QFrame.Shape.HLine)
+        sep_widget.setStyleSheet(
+            "border-top: 1px solid #808080;"
+            "border-bottom: 1px solid #ffffff;"
+        )
+        right_col.addWidget(sep_widget)
+        right_col.addSpacing(8)
 
         self.status_label = QLabel("Starting...")
         self.status_label.setStyleSheet(
-            "color: #9090cc; font-family: 'Tahoma'; font-size: 9px;"
+            "font-family: 'Tahoma';"
+            "font-size: 10px;"
+            "color: #444444;"
+            "border: none;"
+            "background: transparent;"
         )
-        card_layout.addWidget(self.status_label)
+        right_col.addWidget(self.status_label)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
-        self.progress.setFixedHeight(4)
+        self.progress.setFixedHeight(16)
         self.progress.setTextVisible(False)
         self.progress.setStyleSheet(
             "QProgressBar {"
-            "  background-color: #2a2a4e;"
-            "  border: none;"
-            "  border-radius: 2px;"
+            "  background-color: #ffffff;"
+            "  border-top: 1px solid #808080;"
+            "  border-left: 1px solid #808080;"
+            "  border-bottom: 1px solid #ffffff;"
+            "  border-right: 1px solid #ffffff;"
+            "  border-radius: 0px;"
             "}"
             "QProgressBar::chunk {"
-            "  background-color: #5555cc;"
-            "  border-radius: 2px;"
+            "  background-color: #000080;"
+            "  border-radius: 0px;"
             "}"
         )
-        card_layout.addWidget(self.progress)
+        right_col.addWidget(self.progress)
+        right_col.addStretch()
 
-        ver_label = QLabel("v1.0")
-        ver_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        ver_label.setStyleSheet(
-            "color: #44446a; font-family: 'Tahoma'; font-size: 8px;"
-        )
-        card_layout.addWidget(ver_label)
-
-        layout.addWidget(card)
+        content_layout.addLayout(right_col)
+        main_layout.addWidget(content)
 
     def set_status(self, text: str):
         self.status_label.setText(text)
