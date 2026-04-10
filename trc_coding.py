@@ -203,11 +203,11 @@ def _collect_pfl_profiles(base_path: Path) -> list[dict]:
             color = "#228B22"
         elif can_read:
             status = "read"
-            status_label = "tylko odczyt"
+            status_label = "read only"
             color = "#FFD700"
         else:
             status = "blocked"
-            status_label = "brak wymaganych uprawnień"
+            status_label = "missing required permissions"
             color = "#FF8C00"
 
         profile_name = str(info.get("profile_name") or pfl_file.stem).strip() or pfl_file.stem
@@ -250,11 +250,11 @@ def check_ncs_profile(ncs_path: str) -> dict:
                     "can_write": bool(info.get("can_write")),
                     "profile_path": str(base_path),
                     "status": "full" if info.get("can_write") else "read" if info.get("can_read") else "blocked",
-                    "status_label": "pełny dostęp (odczyt + zapis)"
+                    "status_label": "full access (read + write)"
                     if info.get("can_write")
-                    else "tylko odczyt"
+                    else "read only"
                     if info.get("can_read")
-                    else "brak wymaganych uprawnień",
+                    else "missing required permissions",
                     "color": "#228B22" if info.get("can_write") else "#FFD700" if info.get("can_read") else "#FF8C00",
                     "is_selected": True,
                 }
@@ -475,7 +475,7 @@ def _candidate_path(default_path: Path, config_value: str | None) -> Path:
 class PathConfigDialog(QDialog):
     def __init__(self, paths: CodingPaths, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Zmień ścieżki")
+        self.setWindowTitle("Change paths")
         self.setModal(True)
         self._build_ui(paths)
 
@@ -494,8 +494,8 @@ class PathConfigDialog(QDialog):
         layout.addLayout(form)
 
         buttons = QDialogButtonBox()
-        self.ok_button = QPushButton("Zapisz")
-        self.cancel_button = QPushButton("Anuluj")
+        self.ok_button = QPushButton("Save")
+        self.cancel_button = QPushButton("Cancel")
         self.ok_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
         buttons.addButton(self.ok_button, QDialogButtonBox.ButtonRole.AcceptRole)
@@ -513,7 +513,7 @@ class PathConfigDialog(QDialog):
 
         def choose_path():
             if folder:
-                selected = QFileDialog.getExistingDirectory(self, f"Wybierz {label}", edit.text() or str(Path.home()))
+                selected = QFileDialog.getExistingDirectory(self, f"Choose {label}", edit.text() or str(Path.home()))
                 if selected:
                     edit.setText(selected)
             else:
@@ -521,7 +521,7 @@ class PathConfigDialog(QDialog):
                     filter_text = "CSV Files (*.csv);;All Files (*)"
                 else:
                     filter_text = "EDIABAS Files (*.trc *.TRC *.man *.MAN);;All Files (*)"
-                selected, _ = QFileDialog.getOpenFileName(self, f"Wybierz {label}", edit.text() or str(Path.home()), filter_text)
+                selected, _ = QFileDialog.getOpenFileName(self, f"Choose {label}", edit.text() or str(Path.home()), filter_text)
                 if selected:
                     edit.setText(selected)
 
@@ -542,7 +542,7 @@ class PathConfigDialog(QDialog):
 class ExportConfirmDialog(QDialog):
     def __init__(self, changes: list[dict], translator: TrcTranslator, module_file: str = "", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Potwierdzenie eksportu")
+        self.setWindowTitle("Export confirmation")
         self.setModal(True)
         self._translator = translator
         self._module_file = (module_file or "").strip()
@@ -566,12 +566,12 @@ class ExportConfirmDialog(QDialog):
         layout.setSpacing(8)
 
         module_text = self._module_file or "BRAK_MODULU"
-        label = QLabel(f"Podsumowanie zmian - {module_text}")
+        label = QLabel(f"Change summary - {module_text} (Summary of changes)")
         layout.addWidget(label)
 
         table = QTableWidget()
         table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["Funkcja DE", "Funkcja EN", "Było DE (EN)", "Jest DE (EN)"])
+        table.setHorizontalHeaderLabels(["Function DE", "Function EN", "Before DE (EN)", "After DE (EN)"])
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -590,17 +590,17 @@ class ExportConfirmDialog(QDialog):
             table.setItem(row_index, 3, QTableWidgetItem(self._de_en(value_to)))
 
         layout.addWidget(table, 1)
-        layout.addWidget(QLabel(f"Łącznie zmian: {len(changes)}"))
+        layout.addWidget(QLabel(f"Total changes: {len(changes)}"))
 
-        notes_label = QLabel("Notatka (opcjonalnie):")
+        notes_label = QLabel("Note (optional):")
         layout.addWidget(notes_label)
         self.notes_edit = QLineEdit()
         layout.addWidget(self.notes_edit)
 
         button_row = QHBoxLayout()
         button_row.addStretch()
-        self.cancel_button = QPushButton("Anuluj")
-        self.export_button = QPushButton("Eksportuj")
+        self.cancel_button = QPushButton("Cancel")
+        self.export_button = QPushButton("Export")
         self.cancel_button.clicked.connect(self.reject)
         self.export_button.clicked.connect(self.accept)
         button_row.addWidget(self.cancel_button)
@@ -622,7 +622,7 @@ class HistoryCompareDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Historia i porównanie")
+        self.setWindowTitle("History and comparison")
         self.setModal(True)
         self._all_versions = versions
         self._all_history_rows = history_rows or []
@@ -664,11 +664,11 @@ class HistoryCompareDialog(QDialog):
         layout.setSpacing(8)
 
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Filtr historii:"))
+        filter_row.addWidget(QLabel("History filter:"))
         self.vin_filter_mode = QComboBox()
-        self.vin_filter_mode.addItem("Wszystkie VIN", "all")
-        self.vin_filter_mode.addItem("Tylko aktualny VIN", "current")
-        self.vin_filter_mode.addItem("Wybrany VIN", "selected")
+        self.vin_filter_mode.addItem("All VINs", "all")
+        self.vin_filter_mode.addItem("Current VIN only", "current")
+        self.vin_filter_mode.addItem("Selected VIN", "selected")
         filter_row.addWidget(self.vin_filter_mode)
 
         filter_row.addWidget(QLabel("VIN:"))
@@ -684,11 +684,11 @@ class HistoryCompareDialog(QDialog):
         self.history_table.setColumnCount(6)
         self.history_table.setHorizontalHeaderLabels([
             "VIN",
-            "Moduł",
-            "Nr części",
-            "Data prod.",
-            "Zmiany",
-            "Data eksportu",
+            "Module",
+            "Part no.",
+            "Prod. date",
+            "Changes",
+            "Export date",
         ])
         self.history_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -711,10 +711,10 @@ class HistoryCompareDialog(QDialog):
         self._apply_history_filters()
 
         action_row = QHBoxLayout()
-        self.compare_button = QPushButton("Porównaj")
-        self.only_diffs = QCheckBox("Pokaż tylko różnice")
+        self.compare_button = QPushButton("Compare")
+        self.only_diffs = QCheckBox("Show differences only")
         self.only_diffs.setChecked(True)
-        self.export_history_button = QPushButton("Eksportuj zapisane zmiany")
+        self.export_history_button = QPushButton("Export saved changes")
         self.compare_button.clicked.connect(self._compare)
         self.export_history_button.clicked.connect(self._export_selected_history_entry)
         action_row.addWidget(self.compare_button)
@@ -725,7 +725,7 @@ class HistoryCompareDialog(QDialog):
 
         self.diff_table = QTableWidget()
         self.diff_table.setColumnCount(4)
-        self.diff_table.setHorizontalHeaderLabels(["Funkcja DE", "Funkcja EN", "Plik 1 DE (EN)", "Plik 2 DE (EN)"])
+        self.diff_table.setHorizontalHeaderLabels(["Function DE", "Function EN", "File 1 DE (EN)", "File 2 DE (EN)"])
         self.diff_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.diff_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.diff_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -1000,7 +1000,7 @@ class HistoryCompareDialog(QDialog):
 
         if not changes:
             story.append(Spacer(1, 14))
-            story.append(Paragraph("Brak zmian", centered_style))
+            story.append(Paragraph("No changes", centered_style))
         else:
             raw_col_widths = [
                 page_width * 0.04,
@@ -1078,11 +1078,11 @@ class HistoryCompareDialog(QDialog):
 
         row = export_dialog.selected_row()
         if not row:
-            QMessageBox.information(self, "Eksport", "Wybierz wpis historii do eksportu.")
+            QMessageBox.information(self, "Export", "Choose a history entry to export.")
             play_sound("info")
             return
 
-        export_root = QFileDialog.getExistingDirectory(self, "Wybierz folder eksportu", str(Path.home()))
+        export_root = QFileDialog.getExistingDirectory(self, "Choose export folder", str(Path.home()))
         if not export_root:
             return
 
@@ -1091,7 +1091,7 @@ class HistoryCompareDialog(QDialog):
         try:
             export_dir.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
-            QMessageBox.critical(self, "Eksport", f"Nie udało się utworzyć folderu eksportu:\n{exc}")
+            QMessageBox.critical(self, "Export", f"Failed to create the export folder:\n{exc}")
             play_sound("error")
             return
 
@@ -1111,13 +1111,13 @@ class HistoryCompareDialog(QDialog):
             after_path.write_text(after_content, encoding="utf-8", newline="")
             self._write_pdf_report(pdf_path, row, changes)
         except Exception as exc:
-            QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać plików eksportu:\n{exc}")
+            QMessageBox.critical(self, "Export", f"Failed to save export files:\n{exc}")
             play_sound("error")
             return
 
         QMessageBox.information(
             self,
-            "Eksport",
+            "Export",
             f"Zapisano do:\n{export_dir}\n\nFSW_PSWbefore.TRC\nFSW_PSWafter.TRC\nFSW_PSW_report.pdf",
         )
 
@@ -1138,7 +1138,7 @@ class HistoryCompareDialog(QDialog):
         self.vin_filter_combo.addItem("(dowolny)", "")
         for vin in vins:
             model, production_date = vin_details.get(vin, ("", ""))
-            date_text = production_date if production_date else "brak daty"
+            date_text = production_date if production_date else "No date"
             model_text = model if model else "brak modelu"
             self.vin_filter_combo.addItem(f"{vin} | {model_text} | {date_text}", vin)
 
@@ -1280,7 +1280,7 @@ class HistoryCompareDialog(QDialog):
 class HistoryExportDialog(QDialog):
     def __init__(self, rows: list[dict], db: Database | None = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Eksport zapisanych zmian")
+        self.setWindowTitle("Export saved changes")
         self.setModal(True)
         self._rows = list(rows or [])
         self._db = db
@@ -1292,7 +1292,7 @@ class HistoryExportDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        info_label = QLabel("Wybierz zapis z bazy danych do eksportu. Eksport dotyczy tylko danych zapisanych w DB.")
+        info_label = QLabel("Select a database record to export. Export applies only to data saved in the DB.")
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
@@ -1321,8 +1321,8 @@ class HistoryExportDialog(QDialog):
 
         button_row = QHBoxLayout()
         button_row.addStretch()
-        self.cancel_button = QPushButton("Anuluj")
-        self.export_button = QPushButton("Eksportuj")
+        self.cancel_button = QPushButton("Cancel")
+        self.export_button = QPushButton("Export")
         self.cancel_button.clicked.connect(self.reject)
         self.export_button.clicked.connect(self._accept_selection)
         button_row.addWidget(self.cancel_button)
@@ -1333,7 +1333,7 @@ class HistoryExportDialog(QDialog):
         if self.rows_table.rowCount() > 0:
             self.rows_table.setCurrentCell(0, 0)
         else:
-            self.preview.setPlainText("Brak zapisanych zmian w bazie danych.")
+            self.preview.setPlainText("No saved changes in the database.")
             self.export_button.setEnabled(False)
 
     def _fill_rows(self):
@@ -1378,7 +1378,7 @@ class HistoryExportDialog(QDialog):
     def _update_preview(self):
         row = self._current_full_row()
         if not row:
-            self.preview.setPlainText("Brak wyboru.")
+            self.preview.setPlainText("Nothing selected.")
             return
 
         before_content = str(row.get("content_before") or "")
@@ -1404,7 +1404,7 @@ class HistoryExportDialog(QDialog):
             "Zmiany z changed_options:",
         ]
 
-        lines.extend(change_lines or ["Brak zapisanych zmian."])
+        lines.extend(change_lines or ["No saved changes."])
         if before_content or after_content:
             lines.extend([
                 "",
@@ -1431,7 +1431,7 @@ class HistoryExportDialog(QDialog):
 class ModuleDetectDialog(QDialog):
     def __init__(self, candidates: list[tuple[str, float]], parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Wykryte moduły")
+        self.setWindowTitle("Detected modules")
         self.setModal(True)
         self._selected: tuple[str, float] | None = None
         self._build_ui(candidates[:3])
@@ -1441,7 +1441,7 @@ class ModuleDetectDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        layout.addWidget(QLabel("Wybierz wykryty moduł:"))
+        layout.addWidget(QLabel("Select a detected module:"))
         self.list_widget = QListWidget()
         for module_name, ratio in candidates:
             item = QListWidgetItem(f"{module_name} — {int(round(ratio * 100))}%")
@@ -1454,8 +1454,8 @@ class ModuleDetectDialog(QDialog):
         layout.addWidget(self.list_widget, 1)
 
         buttons = QDialogButtonBox()
-        select_button = QPushButton("Wybierz")
-        cancel_button = QPushButton("Anuluj")
+        select_button = QPushButton("Select")
+        cancel_button = QPushButton("Cancel")
         select_button.clicked.connect(self._accept_selection)
         cancel_button.clicked.connect(self.reject)
         buttons.addButton(select_button, QDialogButtonBox.ButtonRole.AcceptRole)
@@ -1517,12 +1517,12 @@ class PresetEditorDialog(QDialog):
 
         if self._view_only and self._preset:
             preset_name = str(self._preset.get("name") or "")
-            self.setWindowTitle(f"Podgląd presetu: {preset_name}")
+            self.setWindowTitle(f"Preset preview: {preset_name}")
         elif self._preset:
-            self.setWindowTitle("Edytuj preset")
+            self.setWindowTitle("Edit preset")
             self._apply_preset_to_copy(self._preset)
         else:
-            self.setWindowTitle("Dodaj preset")
+            self.setWindowTitle("Add preset")
 
         self._build_ui()
         if self._view_only:
@@ -1536,13 +1536,7 @@ class PresetEditorDialog(QDialog):
         layout.setSpacing(6)
 
         if self._view_only:
-            info_label = QLabel("Brak załadowanego pliku TRC — widok tylko do odczytu")
-            info_label.setWordWrap(True)
-            layout.addWidget(info_label)
-
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-
+            info_label = QLabel("No TRC file loaded - read-only view")
         self.name_edit = QLineEdit(str((self._preset or {}).get("name") or ""))
         self.description_edit = QLineEdit(str((self._preset or {}).get("description") or ""))
 
@@ -1556,10 +1550,12 @@ class PresetEditorDialog(QDialog):
         self.model_edit.setStyleSheet(readonly_style)
         self.module_edit.setStyleSheet(readonly_style)
 
-        form.addRow("Nazwa:", self.name_edit)
-        form.addRow("Opis:", self.description_edit)
+        form = QFormLayout()
+
+        form.addRow("Name:", self.name_edit)
+        form.addRow("Description:", self.description_edit)
         form.addRow("Model:", self.model_edit)
-        form.addRow("Moduł:", self.module_edit)
+        form.addRow("Module:", self.module_edit)
         layout.addLayout(form)
 
         if self._view_only:
@@ -1574,7 +1570,7 @@ class PresetEditorDialog(QDialog):
 
             button_row = QHBoxLayout()
             button_row.addStretch()
-            close_button = QPushButton("Zamknij")
+            close_button = QPushButton("Close")
             close_button.clicked.connect(self.reject)
             button_row.addWidget(close_button)
             layout.addLayout(button_row)
@@ -1585,7 +1581,7 @@ class PresetEditorDialog(QDialog):
         filter_row.setSpacing(4)
         filter_row.addWidget(QLabel("🔍"))
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Filtruj opcje... (nazwa lub tłumaczenie)")
+        self.search_edit.setPlaceholderText("Filter options... (name or translation)")
         self.search_edit.textChanged.connect(self._on_filter_text_changed)
         filter_row.addWidget(self.search_edit, 1)
         clear_button = QPushButton("✕")
@@ -1598,12 +1594,12 @@ class PresetEditorDialog(QDialog):
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "★",
-            "Nr",
-            "Opcja",
-            "Tłumaczenie opcji",
-            "Wartość",
-            "Tłumaczenie wartości",
-            "Zmieniono",
+            "No.",
+            "Option",
+            "Option translation",
+            "Value",
+            "Value translation",
+            "Changed",
         ])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -1614,8 +1610,8 @@ class PresetEditorDialog(QDialog):
 
         button_row = QHBoxLayout()
         button_row.addStretch()
-        self.save_button = QPushButton("Zapisz")
-        self.cancel_button = QPushButton("Anuluj")
+        self.save_button = QPushButton("Save")
+        self.cancel_button = QPushButton("Cancel")
         self.save_button.clicked.connect(self._on_save)
         self.cancel_button.clicked.connect(self.reject)
         button_row.addWidget(self.save_button)
@@ -1935,10 +1931,10 @@ class PresetEditorDialog(QDialog):
             QMessageBox.warning(self, "Preset", "Nazwa presetu jest wymagana.")
             return
         if not model:
-            QMessageBox.warning(self, "Preset", "Model jest wymagany.")
+            QMessageBox.warning(self, "Preset", "Model is required.")
             return
         if not module:
-            QMessageBox.warning(self, "Preset", "Moduł jest wymagany.")
+            QMessageBox.warning(self, "Preset", "Module is required.")
             return
 
         self._sync_values_from_widgets()
@@ -1956,7 +1952,7 @@ class PresetEditorDialog(QDialog):
             )
 
         if not changes:
-            QMessageBox.warning(self, "Preset", "Nie wprowadzono żadnych zmian.")
+            QMessageBox.warning(self, "Preset", "No changes were made.")
             return
 
         preset_id = None
@@ -1969,7 +1965,7 @@ class PresetEditorDialog(QDialog):
 
 class PresetsPanel(QGroupBox):
     def __init__(self, coding_panel, db, parent=None):
-        super().__init__("Presety", parent)
+        super().__init__("Presets", parent)
         self._coding_panel = coding_panel
         self._db = db
         self._current_model = ""
@@ -1986,10 +1982,10 @@ class PresetsPanel(QGroupBox):
         self.list_widget.currentItemChanged.connect(self._update_button_states)
         layout.addWidget(self.list_widget, 1)
 
-        self.load_button = QPushButton("Załaduj preset")
-        self.view_edit_button = QPushButton("Podejrzyj / Edytuj")
-        self.add_button = QPushButton("Dodaj preset")
-        self.delete_button = QPushButton("Usuń preset")
+        self.load_button = QPushButton("Load preset")
+        self.view_edit_button = QPushButton("View / Edit")
+        self.add_button = QPushButton("Add preset")
+        self.delete_button = QPushButton("Delete preset")
 
         self.load_button.clicked.connect(self._on_load_preset)
         self.view_edit_button.clicked.connect(self._on_view_edit)
@@ -2094,7 +2090,7 @@ class PresetsPanel(QGroupBox):
 
     def _show_unmatched_dialog(self, unmatched: list[dict], applied_count: int):
         dialog = QDialog(self)
-        dialog.setWindowTitle("Niedopasowane opcje presetu")
+        dialog.setWindowTitle("Unmatched preset options")
         dialog.setModal(True)
 
         layout = QVBoxLayout(dialog)
@@ -2102,16 +2098,16 @@ class PresetsPanel(QGroupBox):
         layout.setSpacing(6)
 
         if applied_count == 0:
-            top_text = "Żadna opcja z presetu nie została dopasowana do załadowanego pliku TRC."
+            top_text = "No preset option matched the loaded TRC file."
         else:
-            top_text = "Niektóre opcje z presetu nie zostały dopasowane do załadowanego pliku TRC:"
+            top_text = "Some preset options were not matched to the loaded TRC file:"
         label = QLabel(top_text)
         label.setWordWrap(True)
         layout.addWidget(label)
 
         table = QTableWidget()
         table.setColumnCount(2)
-        table.setHorizontalHeaderLabels(["Opcja", "Wartość"])
+        table.setHorizontalHeaderLabels(["Option", "Value"])
         table.setRowCount(len(unmatched))
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -2129,7 +2125,7 @@ class PresetsPanel(QGroupBox):
         layout.addWidget(table, 1)
 
         if applied_count > 0:
-            applied_label = QLabel(f"Dopasowano i zastosowano: {applied_count} opcji.")
+            applied_label = QLabel(f"Matched and applied: {applied_count} options.")
             layout.addWidget(applied_label)
 
         button_row = QHBoxLayout()
@@ -2143,14 +2139,14 @@ class PresetsPanel(QGroupBox):
 
     def _ask_conflicts_action(self, conflicts: list[dict]) -> str:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Konflikty presetu")
+        dialog.setWindowTitle("Preset conflicts")
         dialog.setModal(True)
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
 
-        layout.addWidget(QLabel("Wykryto konflikty wartości. Wybierz akcję:"))
+        layout.addWidget(QLabel("Value conflicts were detected. Choose an action:"))
 
         table = QTableWidget()
         table.setColumnCount(3)
@@ -2172,9 +2168,9 @@ class PresetsPanel(QGroupBox):
         button_row = QHBoxLayout()
         button_row.addStretch()
 
-        yes_button = QPushButton("Tak")
-        no_button = QPushButton("Nie")
-        cancel_button = QPushButton("Anuluj")
+        yes_button = QPushButton("Yes")
+        no_button = QPushButton("No")
+        cancel_button = QPushButton("Cancel")
 
         yes_button.clicked.connect(lambda: action_holder.update({"value": "all"}) or dialog.accept())
         no_button.clicked.connect(lambda: action_holder.update({"value": "non_conflicting"}) or dialog.accept())
@@ -2213,7 +2209,7 @@ class PresetsPanel(QGroupBox):
             if unmatched:
                 self._show_unmatched_dialog(unmatched, applied_count=0)
             else:
-                QMessageBox.information(self, "Preset", "Brak pasujących opcji do załadowania.")
+                QMessageBox.information(self, "Preset", "No matching options to load.")
             return
 
         applied_changes: list[dict] = []
@@ -2322,7 +2318,7 @@ class CodingPanel(QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(4)
 
-        self.path_warning_label = QLabel("Brak wymaganych ścieżek")
+        self.path_warning_label = QLabel("Missing required paths")
         self.path_warning_label.setWordWrap(True)
         self.path_warning_label.setStyleSheet(
             "background-color: #ffff99; color: #000000; border: 1px solid #808080; padding: 4px;"
@@ -2330,7 +2326,7 @@ class CodingPanel(QWidget):
         self.path_warning_label.setVisible(False)
         left_layout.addWidget(self.path_warning_label)
 
-        self.change_path_button = QPushButton("Zmień ścieżkę")
+        self.change_path_button = QPushButton("Change path")
         self.change_path_button.clicked.connect(self._open_path_config_dialog)
         left_layout.addWidget(self.change_path_button)
 
@@ -2339,12 +2335,12 @@ class CodingPanel(QWidget):
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
         left_layout.addWidget(self.model_combo)
 
-        left_layout.addWidget(QLabel("Moduł:"))
+        left_layout.addWidget(QLabel("Module:"))
         self.module_combo = QComboBox()
         self.module_combo.currentIndexChanged.connect(self._on_module_changed)
         left_layout.addWidget(self.module_combo)
 
-        self.detect_module_button = QPushButton("🔍 Wykryj moduł")
+        self.detect_module_button = QPushButton("🔍 Detect module")
         self.detect_module_button.clicked.connect(self.detect_module_from_current_trc)
         self.detect_module_button.setEnabled(False)
         left_layout.addWidget(self.detect_module_button)
@@ -2353,10 +2349,10 @@ class CodingPanel(QWidget):
         self.detect_progress.setRange(0, 0)
         self.detect_progress.setVisible(False)
         self.detect_progress.setTextVisible(True)
-        self.detect_progress.setFormat("Szukam modułu...")
+        self.detect_progress.setFormat("Searching for module...")
         left_layout.addWidget(self.detect_progress)
 
-        self.load_trc_button = QPushButton("📂 Załaduj TRC")
+        self.load_trc_button = QPushButton("📂 Load TRC")
         self.load_trc_button.clicked.connect(self.load_selected_trc)
         self.load_trc_button.setEnabled(True)
         left_layout.addWidget(self.load_trc_button)
@@ -2370,7 +2366,7 @@ class CodingPanel(QWidget):
         self.refresh_button.clicked.connect(self.reload_current_trc)
         left_layout.addWidget(self.refresh_button)
 
-        self.history_button = QPushButton("📂 Historia")
+        self.history_button = QPushButton("📂 History")
         self.history_button.clicked.connect(self.open_history_dialog)
         left_layout.addWidget(self.history_button)
 
@@ -2395,7 +2391,7 @@ class CodingPanel(QWidget):
         self.profile_status_label.setStyleSheet("background: transparent;")
         profile_status_layout.addWidget(self.profile_status_label, 1)
 
-        self.profile_status_button = QPushButton("📁 Zmień folder")
+        self.profile_status_button = QPushButton("📁 Change folder")
         self.profile_status_button.clicked.connect(self._choose_ncs_profile_file)
         profile_status_layout.addWidget(self.profile_status_button)
 
@@ -2417,7 +2413,7 @@ class CodingPanel(QWidget):
         filter_row.addWidget(self.search_icon_label)
 
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Filtruj opcje... (nazwa lub tłumaczenie)")
+        self.search_edit.setPlaceholderText("Filter options... (name or translation)")
         self.search_edit.textChanged.connect(self._on_filter_text_changed)
         filter_row.addWidget(self.search_edit, 1)
 
@@ -2434,7 +2430,7 @@ class CodingPanel(QWidget):
 
         table_layout.addLayout(filter_row)
 
-        self.context_label = QLabel("Wybierz model, następnie załaduj TRC")
+        self.context_label = QLabel("Select a model, then load the TRC")
         self.context_label.setWordWrap(True)
         table_layout.addWidget(self.context_label)
 
@@ -2508,7 +2504,7 @@ class CodingPanel(QWidget):
 
         if not found:
             self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
-            no_profiles_label = QLabel("Brak profili .PFL w katalogu")
+            no_profiles_label = QLabel("No .PFL profiles in the folder")
             no_profiles_label.setStyleSheet("color: #606060; font-weight: bold; background: transparent;")
             no_profiles_label.setWordWrap(False)
             self.profile_status_label_layout.addWidget(no_profiles_label)
@@ -2546,7 +2542,7 @@ class CodingPanel(QWidget):
 
         if not chip_widgets:
             self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
-            fallback_label = QLabel("Brak profili .PFL w katalogu")
+            fallback_label = QLabel("No .PFL profiles in the folder")
             fallback_label.setStyleSheet("color: #606060; font-weight: bold; background: transparent;")
             fallback_label.setWordWrap(False)
             self.profile_status_label_layout.addWidget(fallback_label)
@@ -2565,21 +2561,21 @@ class CodingPanel(QWidget):
         can_write = bool(profile.get("can_write"))
         
         if can_write:
-            status = "✅ Pełny dostęp (odczyt + zapis)"
+            status = "✅ Full access (read + write)"
             color = "#228B22"
         elif can_read:
-            status = "🔒 Tylko odczyt"
+            status = "🔒 Read only"
             color = "#FFD700"
         else:
-            status = "❌ Brak wymaganych uprawnień"
+            status = "❌ Missing required permissions"
             color = "#FF8C00"
         
         dialog = QMessageBox(self)
-        dialog.setWindowTitle("Informacje o profilu NCS Expert")
+        dialog.setWindowTitle("NCS Expert profile information")
         dialog.setIcon(QMessageBox.Icon.Information)
         dialog.setText(
-            f"Profil: <b>{html_escape(profile_name)}</b>\n\n"
-            f"Ścieżka:\n{html_escape(profile_path)}\n\n"
+            f"Profile: <b>{html_escape(profile_name)}</b>\n\n"
+            f"Path:\n{html_escape(profile_path)}\n\n"
             f"Status: {status}"
         )
         dialog.setStyleSheet(f"QMessageBox {{ background-color: #FFFFFF; }}")
@@ -2602,7 +2598,7 @@ class CodingPanel(QWidget):
         
         selected_folder = QFileDialog.getExistingDirectory(
             self,
-            "Wybierz folder z profilami NCS Expert",
+            "Choose the NCS Expert profiles folder",
             start_dir,
             QFileDialog.Option.ShowDirsOnly,
         )
@@ -2618,16 +2614,16 @@ class CodingPanel(QWidget):
             return True
 
         dialog = QMessageBox(self)
-        dialog.setWindowTitle("Ostrzeżenie NCS Expert")
+        dialog.setWindowTitle("NCS Expert warning")
         dialog.setIcon(QMessageBox.Icon.Warning)
         dialog.setText(
-            "⚠️ Aktywny profil NCS Expert nie pozwala na zapis.\n\n"
-            "Aby wgrać zmiany do modułu, załaduj profil z pełnym dostępem\n"
-            "(np. NCSDUMMY4.PFL lub EXPERTENMODE.PFL).\n"
-            "Czy mimo to wyeksportować plik .MAN?"
+            "⚠️ The active NCS Expert profile does not allow writing.\n\n"
+            "To write changes to the module, load a full-access profile\n"
+            "(e.g. NCSDUMMY4.PFL or EXPERTENMODE.PFL).\n"
+            "Export the .MAN file anyway?"
         )
-        yes_button = dialog.addButton("Tak, eksportuj", QMessageBox.ButtonRole.AcceptRole)
-        cancel_button = dialog.addButton("Anuluj", QMessageBox.ButtonRole.RejectRole)
+        yes_button = dialog.addButton("Yes, export", QMessageBox.ButtonRole.AcceptRole)
+        cancel_button = dialog.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
         dialog.exec()
         return dialog.clickedButton() == yes_button and cancel_button is not None
 
@@ -2649,7 +2645,7 @@ class CodingPanel(QWidget):
             missing.append("Translations.csv")
 
         if missing:
-            self.path_warning_label.setText("Brak ścieżek: " + ", ".join(missing))
+            self.path_warning_label.setText("Missing paths: " + ", ".join(missing))
             self.path_warning_label.setVisible(True)
         else:
             self.path_warning_label.setVisible(False)
@@ -2717,7 +2713,7 @@ class CodingPanel(QWidget):
         self.module_combo.blockSignals(False)
 
         if not self._available_models:
-            self.context_label.setText("Nie znaleziono folderów chassis z plikami .Cxx w DATEN")
+            self.context_label.setText("No chassis folders with .Cxx files were found in DATEN")
             self._module_options = set()
             self._render_table()
             self.load_trc_button.setEnabled(False)
@@ -2729,7 +2725,7 @@ class CodingPanel(QWidget):
             self.model_combo.setCurrentIndex(0)
         else:
             self.model_combo.setCurrentIndex(-1)
-            self.context_label.setText("Najpierw załaduj TRC, potem wybierz model")
+            self.context_label.setText("Load the TRC first, then choose a model")
         if hasattr(self, "_presets_panel"):
             self._presets_panel.refresh(self._current_model, self._current_module)
 
@@ -2751,7 +2747,7 @@ class CodingPanel(QWidget):
             self._render_table()
         self.module_combo.blockSignals(True)
         self.module_combo.clear()
-        self.module_combo.addItem("-- wybierz moduł --", "")
+        self.module_combo.addItem("-- choose a module --", "")
         for module_file in self._modules_by_model.get(model_name, []):
             self.module_combo.addItem(module_file, module_file)
         self.module_combo.blockSignals(False)
@@ -2760,9 +2756,9 @@ class CodingPanel(QWidget):
         self.load_trc_button.setEnabled(True)
         self.detect_module_button.setEnabled(self._trc_loaded)
         if self._trc_loaded:
-            self.context_label.setText("TRC załadowane. Wybierz moduł lub użyj wykrywania, aby dopasować opcje.")
+            self.context_label.setText("TRC loaded. Choose a module or use detection to match the options.")
         else:
-            self.context_label.setText(f"Model: {model_name} | Krok 2: kliknij '📂 Załaduj TRC'")
+            self.context_label.setText(f"Model: {model_name} | Step 2: click '📂 Load TRC'")
 
     def _on_module_changed(self, index: int):
         if index < 0 or not self._current_model:
@@ -2780,7 +2776,7 @@ class CodingPanel(QWidget):
             if self._segments:
                 self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
                 self._render_table()
-                self.context_label.setText("TRC załadowane bez filtrowania modułu.")
+                self.context_label.setText("TRC loaded without module filtering.")
             return
 
         self._current_module_file = module_file
@@ -2820,15 +2816,15 @@ class CodingPanel(QWidget):
         if self._segments:
             self._apply_module_filter_to_table()
         else:
-            self.context_label.setText(f"Model: {self._current_model} | Moduł: {self._current_module_file}")
+            self.context_label.setText(f"Model: {self._current_model} | Module: {self._current_module_file}")
 
     def detect_module_from_current_trc(self):
         if not self._current_model:
-            QMessageBox.information(self, "Wykrywanie", "Najpierw wybierz model.")
+            QMessageBox.information(self, "Detection", "Choose a model first.")
             play_sound("info")
             return
         if not self._trc_loaded:
-            QMessageBox.information(self, "Wykrywanie", "Najpierw załaduj FSW_PSW.TRC.")
+            QMessageBox.information(self, "Detection", "Load FSW_PSW.TRC first.")
             play_sound("info")
             return
 
@@ -2838,14 +2834,14 @@ class CodingPanel(QWidget):
         trc_path = Path(self._paths.trc_path)
         trc_map = parse_trc_file(str(trc_path))
         if not trc_map:
-            QMessageBox.information(self, "Wykrywanie", "Nie udało się odczytać opcji z FSW_PSW.TRC.")
+            QMessageBox.information(self, "Detection", "Failed to read options from FSW_PSW.TRC.")
             play_sound("warning")
             return
 
         self.detect_module_button.setEnabled(False)
         self.load_trc_button.setEnabled(False)
         self.detect_progress.setVisible(True)
-        self.context_label.setText("Szukam modułu...")
+        self.context_label.setText("Searching for module...")
         QApplication.processEvents()
 
         self._detect_thread = QThread(self)
@@ -2864,7 +2860,7 @@ class CodingPanel(QWidget):
     def _on_detect_finished(self, candidates: list[tuple[str, float]]):
         self._stop_detect_ui()
         if not candidates:
-            QMessageBox.information(self, "Wykrywanie", "Brak kandydatów powyżej 30% dopasowania.")
+            QMessageBox.information(self, "Detection", "No candidates above 30% match.")
             play_sound("info")
             return
 
@@ -2881,11 +2877,11 @@ class CodingPanel(QWidget):
         if module_index >= 0:
             self.module_combo.setCurrentIndex(module_index)
 
-        self.context_label.setText(f"Wykryto moduł: {module_file} ({int(round(ratio * 100))}%).")
+        self.context_label.setText(f"Detected module: {module_file} ({int(round(ratio * 100))}%).")
 
     def _on_detect_failed(self, message: str):
         self._stop_detect_ui()
-        QMessageBox.warning(self, "Wykrywanie", f"Błąd podczas wyszukiwania modułu:\n{message}")
+        QMessageBox.warning(self, "Detection", f"Error while searching for the module:\n{message}")
         play_sound("error")
 
     def _stop_detect_ui(self):
@@ -2921,7 +2917,7 @@ class CodingPanel(QWidget):
             self.module_combo.setEnabled(False)
             self.detect_module_button.setEnabled(False)
             self._render_table()
-            self.context_label.setText(f"Nie znaleziono pliku: {trc_path}")
+            self.context_label.setText(f"File not found: {trc_path}")
             if hasattr(self, "_presets_panel"):
                 self._presets_panel.refresh(self._current_model, self._current_module)
             return
@@ -2961,7 +2957,7 @@ class CodingPanel(QWidget):
             self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
             self._render_table()
             self.context_label.setText(
-                f"Załadowano TRC ({len(self._option_rows)} opcji). Wybierz model i moduł lub użyj '🔍 Wykryj moduł'."
+                f"TRC loaded ({len(self._option_rows)} options). Choose a model and module or use '🔍 Detect module'."
             )
         if hasattr(self, "_presets_panel"):
             self._presets_panel.refresh(self._current_model, self._current_module)
@@ -2986,7 +2982,7 @@ class CodingPanel(QWidget):
             )
         else:
             self.context_label.setText(
-                f"Model: {self._current_model} | Moduł: {self._current_module_file} — brak opisu .Cxx"
+                f"Model: {self._current_model} | Module: {self._current_module_file} — no .Cxx description"
             )
 
     def _render_table(self):
@@ -3058,7 +3054,7 @@ class CodingPanel(QWidget):
             value_translation_item = QTableWidgetItem(self._translator.translate(segment.value))
             value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-            changed_item = QTableWidgetItem("Nie")
+            changed_item = QTableWidgetItem("No")
             changed_item.setFlags(changed_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
             self.trc_table.setItem(row_index, 0, favorite_item)
@@ -3421,7 +3417,7 @@ class CodingPanel(QWidget):
     def export_current_file(self, extension: str):
         changes = self._current_changes()
         if not changes:
-            QMessageBox.information(self, "Eksport", "Brak zmian do eksportu.")
+            QMessageBox.information(self, "Export", "No changes to export.")
             play_sound("info")
             return
 
@@ -3452,7 +3448,7 @@ class CodingPanel(QWidget):
             file_filter = "NCS Expert Files (*.MAN *.TRC);;All Files (*)"
             selected_path, _ = QFileDialog.getSaveFileName(
                 self,
-                "Eksportuj zmiany",
+                "Export changes",
                 str(suggested_path),
                 file_filter,
             )
@@ -3470,7 +3466,7 @@ class CodingPanel(QWidget):
             export_path.parent.mkdir(parents=True, exist_ok=True)
             export_path.write_text(content_after, encoding="utf-8", newline="")
         except Exception as exc:
-            QMessageBox.critical(self, "Eksport", f"Nie udało się zapisać pliku:\n{exc}")
+            QMessageBox.critical(self, "Export", f"Failed to save the file:\n{exc}")
             play_sound("error")
             return
 
@@ -3500,13 +3496,13 @@ class CodingPanel(QWidget):
             self._segments[segment_index].original_value = self._segments[segment_index].value
         self._render_table()
 
-        QMessageBox.information(self, "Eksport", f"Zapisano do:\n{export_path}")
+        QMessageBox.information(self, "Export", f"Saved to:\n{export_path}")
         play_sound("success")
 
     def open_history_dialog(self):
         versions, history_rows, current_vin = self._build_history_versions()
         if len(history_rows) < 1 and not self._current_baseline_content():
-            QMessageBox.information(self, "Historia", "Brak danych do porównania.")
+            QMessageBox.information(self, "History", "No data to compare.")
             play_sound("info")
             return
 
@@ -3596,7 +3592,7 @@ class CodingPanel(QWidget):
             except Exception:
                 pass
 
-        label = exported_at or "Brak daty"
+        label = exported_at or "No date"
         if module:
             label = f"{label} — {module}"
         if notes:
