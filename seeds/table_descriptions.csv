@@ -1,0 +1,19 @@
+table_name,name_en,description_en
+JOBRESULT,Job Result Codes,"Standard status codes returned by all jobs: OKAY, BUSY, ERROR_ECU_REJECTED, ERROR_ECU_PARAMETER, ERROR_ECU_FUNCTION, ERROR_ECU_NUMBER, ERROR_ECU_NACK, ERROR_ECU_UNKNOWN_STATUSBYTE."
+LIEFERANTEN,Supplier List,"List of ECU hardware manufacturers and suppliers (Bosch, Siemens, Hella, Delphi, Valeo, MBB, etc.) referenced across all BMW modules."
+FORTTEXTE,Progress Texts,Standard text strings for diagnostic progress and status reporting used across modules.
+FARTTEXTE,Color / State Texts,Text labels for colors and operational states used in diagnostic responses.
+BETRIEBSWTAB,Live Data Parameter Table,"Defines all live data parameters readable from this ECU: byte position in DS2 telegram, data type, measurement unit, and scaling factors FACT_A / FACT_B."
+FDETAILSTRUKTUR,Fault Detail Structure,Defines the byte layout of fault memory detail records stored in the ECU.
+IDETAILSTRUKTUR,Info Detail Structure,Defines the byte layout of info and status detail records stored in the ECU.
+HDETAILSTRUKTUR,History Detail Structure,Defines the byte layout of historical fault records stored in the ECU.
+FUMWELTTEXTE,Fault Environment Texts,Human-readable descriptions for fault environment (Umwelt) data fields captured alongside fault codes.
+IUMWELTTEXTE,Info Environment Texts,Human-readable descriptions for info environment data fields.
+KONZEPT_TABELLE,Diagnostic Concept Table,Maps diagnostic concepts and modes to their implementation parameters for this ECU.
+STEUERN_DIGITAL,Digital Control Values,Digital input and output control value definitions for actuator testing.
+ASCII,ASCII Lookup Table,ASCII character mapping table used for string encoding within the ECU communication protocol.
+JOBRESULTEXTENDED,Extended Job Result Codes,"Extended set of job status codes beyond the standard JOBRESULT set, used by newer ECU generations."
+FUMWELTMATRIX,Fault Environment Matrix,Matrix defining which environment data fields are captured for each fault code.
+FEHLERCODES,Fault Code Texts,Human-readable text descriptions for diagnostic trouble codes (DTCs).
+STATUS_TEXT,Status Texts,Text representations of ECU operational status values returned by status jobs.
+FARTTYP,Color Type Codes,Lookup table mapping color type codes to their text representations.

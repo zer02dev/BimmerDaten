@@ -27,8 +27,22 @@ class Database:
         self._ensure_presets_schema()
         self._ensure_sa_translations_schema()
         self._ensure_table_descriptions_schema()
+        self._ensure_settings_schema()
         self.conn.commit()
         self.apply_seeds()
+
+    def _connect(self):
+        return self.conn
+
+    def _ensure_settings_schema(self) -> None:
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """
+        )
 
     def apply_seeds(self) -> None:
         """Import seed CSV files from ./seeds into matching tables using INSERT OR IGNORE."""
@@ -798,6 +812,22 @@ class Database:
 
             self.conn.commit()
             return count
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (key,),
+            ).fetchone()
+            return row[0] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (key, value),
+            )
+            conn.commit()
 
     def close(self):
         try:

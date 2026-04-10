@@ -103,6 +103,27 @@ class TranslationWorker(QThread):
             )
 
 
+class UpdateCheckWorker(QThread):
+    update_available = pyqtSignal(str)
+
+    VERSION_URL = "https://raw.githubusercontent.com/zer02dev/BimmerDaten/main/seeds/version.txt"
+
+    def __init__(self, local_version: str, parent=None):
+        super().__init__(parent)
+        self.local_version = local_version
+
+    def run(self):
+        try:
+            import urllib.request
+
+            with urllib.request.urlopen(self.VERSION_URL, timeout=5) as resp:
+                remote = resp.read().decode("utf-8").strip()
+            if remote and remote > self.local_version:
+                self.update_available.emit(remote)
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Kategorie jobów — na podstawie prefiksu nazwy
 
@@ -1935,6 +1956,7 @@ class MainWindow(QMainWindow):
         self._models_loaded_for_path: str = ""
         self._models_parser_cls = None
         self._sa_config = self._load_sa_config()
+        self._update_worker: UpdateCheckWorker | None = None
 
         if DB_AVAILABLE:
             db_path = Path(__file__).resolve().parent / "data" / "database.db"
@@ -1947,6 +1969,7 @@ class MainWindow(QMainWindow):
 
         self._setup_ui()
         self._setup_menu()
+        self._start_update_check()
         self.setStyleSheet(WIN98_STYLE)
         QTimer.singleShot(0, self._run_startup_guard)
 
@@ -2113,6 +2136,28 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
+
+        self.update_bar = QWidget()
+        self.update_bar.setVisible(False)
+        self.update_bar.setStyleSheet("background-color: #fff3cd; border-bottom: 1px solid #c0a800;")
+
+        bar_layout = QHBoxLayout(self.update_bar)
+        bar_layout.setContentsMargins(8, 4, 8, 4)
+
+        self.update_bar_label = QLabel("💡 Database update available")
+        bar_layout.addWidget(self.update_bar_label, 1)
+
+        update_now_btn = QPushButton("Update now")
+        update_now_btn.setFixedWidth(100)
+        update_now_btn.clicked.connect(self._update_database_github)
+        bar_layout.addWidget(update_now_btn)
+
+        dismiss_btn = QPushButton("Dismiss")
+        dismiss_btn.setFixedWidth(70)
+        dismiss_btn.clicked.connect(self.update_bar.hide)
+        bar_layout.addWidget(dismiss_btn)
+
+        main_layout.insertWidget(0, self.update_bar)
 
         welcome_bar = QWidget()
         welcome_bar.setStyleSheet("background-color: #000080; border-bottom: 1px solid #808080;")
@@ -2290,6 +2335,21 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
+    def _start_update_check(self):
+        if not self._db:
+            return
+        local_version = self._db.get_setting("seeds_version", "0000-00-00")
+        self._update_worker = UpdateCheckWorker(local_version)
+        self._update_worker.update_available.connect(self._on_update_available)
+        self._update_worker.start()
+
+    def _on_update_available(self, remote_version: str):
+        self.update_bar_label.setText(
+            f"💡 Database update available (v{remote_version}) — "
+            "new presets and translations ready to download"
+        )
+        self.update_bar.setVisible(True)
+
     def _update_database_github(self):
         if not self._db:
             QMessageBox.warning(self, "Update Database", "Database is not available.")
@@ -2319,6 +2379,17 @@ class MainWindow(QMainWindow):
             return
 
         progress.close()
+
+        if self._db:
+            try:
+                import urllib.request
+
+                with urllib.request.urlopen(UpdateCheckWorker.VERSION_URL, timeout=5) as resp:
+                    remote_version = resp.read().decode("utf-8").strip()
+                self._db.set_setting("seeds_version", remote_version)
+                self.update_bar.setVisible(False)
+            except Exception:
+                pass
 
         lines = []
         for table, result in results.items():

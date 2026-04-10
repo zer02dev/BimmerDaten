@@ -63,6 +63,7 @@ ENV/
 Thumbs.db
 
 # Project-specific generated/runtime files
+data/database.db
 *.trc
 *.000
 *.MAN

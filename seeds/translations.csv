@@ -1,0 +1,188 @@
+prg_file,job_name,comment_de,comment_en,comment_pl,updated_at
+ME9K_NG4,INFO,Information SGBD,Information SGBD,Informacje SGBD,2026-04-03 01:37:04
+ME9K_NG4,INITIALISIERUNG,Initialisierung und Kommunikationsparameter,Initialization and communication parameters,Parametry inicjalizacji i komunikacji,2026-04-03 01:37:08
+ME9K_NG4,AIF_LESEN,Auslesen des Anwender Informations Feldes,Reading out the user information field,Odczyt pola informacji o użytkowniku,2026-04-03 01:37:10
+ME9K_NG4,SERIENNUMMER_LESEN,Hersteller Seriennummer lesen,Read manufacturer serial number,Przeczytaj numer seryjny producenta,2026-04-03 01:37:14
+ME9K_NG4,DATEN_REFERENZ_LESEN,Auslesen der Daten Referenz,Reading out the data reference,Odczyt odniesienia do danych,2026-04-03 01:37:17
+ME9K_NG4,PRUEFSTEMPEL_LESEN,Auslesen des Pruefstempels,Reading out the test stamp,Odczytanie stempla testowego,2026-04-03 01:37:19
+ME9K_NG4,PRUEFSTEMPEL_SCHREIBEN,Beschreiben des Pruefstempels,Describe the test stamp,Opisz stempel testowy,2026-04-03 01:37:22
+ME9K_NG4,PRUEFCODE_LESEN,Standard Pruefcode lesen fuer Kundendienst,Read standard test code for customer service,Przeczytaj standardowy kod testowy dla obsługi klienta,2026-04-03 01:37:25
+ME9K_NG4,IDENT,Identdaten fuer DME auslesen,Read out identification data for DME,Odczytaj dane identyfikacyjne dla DME,2026-04-03 01:37:28
+ME9K_NG4,IDENT_AIF,Identdaten fuer DME auslesen,Read out identification data for DME,Odczytaj dane identyfikacyjne dla DME,2026-04-03 01:37:31
+ME9K_NG4,ADAP_SELEKTIV_LOESCHEN,Loeschen der Adaptionswerte,Delete the adaptation values,Usuń wartości adaptacyjne,2026-04-03 01:37:35
+ME9K_NG4,FS_LESEN_LANG,Fehlerspeicher auslesen,Read out error memory,Odczytaj pamięć błędów,2026-04-03 01:37:40
+ME9K_NG4,FS_LESEN,Fehlerspeicher auslesen,Read out error memory,Odczytaj pamięć błędów,2026-04-03 01:37:42
+ME9K_NG4,DIAGNOSE_ENDE,,,,2026-04-03 01:37:42
+ME9K_NG4,FS_HEX_LESEN,Fehlerspeicher auslesen als Hex Dump,Read error memory as hex dump,Odczytaj pamięć błędów jako zrzut szesnastkowy,2026-04-03 01:37:46
+ME9K_NG4,STEUERN_VVT_ANSCHLAG,Lernen der VVT-Anschlaege,Learning the VVT ​​stops,Nauka zatrzymania VVT,2026-04-03 01:37:50
+ME9K_NG4,STATUS_VVT_ANSCHLAG,Status Lernen VVT-Anschlaege,Status learning VVT stops,Uczenie się stanu VVT zatrzymuje się,2026-04-03 01:37:54
+ME9K_NG4,ENDE_VVT_ANSCHLAG,Ende von Lernen der VVT-Anschlaege,End of learning the VVT ​​stops,Koniec nauki zatrzymania VVT,2026-04-03 01:37:57
+ME9K_NG4,FS_LOESCHEN,Loeschen des Fehlerspeichers,Clearing the error memory,Kasowanie pamięci błędów,2026-04-03 01:38:00
+ME9K_NG4,SEED_KEY,Schutzmechanismus SEED_KEY,Protection mechanism SEED_KEY,Mechanizm zabezpieczający SEED_KEY,2026-04-03 01:38:03
+ME9K_NG4,STEUERN_EV_1,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:07
+ME9K_NG4,STEUERN_EV_2,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:10
+ME9K_NG4,STEUERN_EV_3,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:13
+ME9K_NG4,STEUERN_EV_4,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:15
+ME9K_NG4,STEUERN_EV_1_AUS,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:18
+ME9K_NG4,STEUERN_EV_2_AUS,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:21
+ME9K_NG4,STEUERN_EV_3_AUS,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:24
+ME9K_NG4,STEUERN_EV_4_AUS,Stellgliedansteuerung Einspritzventile,Actuator control for injection valves,Sterowanie siłownikiem zaworów wtryskowych,2026-04-03 01:38:26
+ME9K_NG4,STEUERN_E_LUEFTER,Stellgliedansteuerung E-Luefter,Actuator control E-fan,Sterowanie siłownikiem E-fan,2026-04-03 01:38:30
+ME9K_NG4,STEUERN_E_LUEFTER_AUS,Stellgliedansteuerung E-Luefter,Actuator control E-fan,Sterowanie siłownikiem E-fan,2026-04-03 01:38:33
+ME9K_NG4,STEUERN_SLP,Stellgliedansteuerung SLP,Actuator control SLP,Sterowanie siłownikiem SLP,2026-04-03 01:38:37
+ME9K_NG4,STEUERN_SLP_AUS,Stellgliedansteuerung SLP,Actuator control SLP,Sterowanie siłownikiem SLP,2026-04-03 01:38:40
+ME9K_NG4,STEUERN_TEV,Stellgliedansteuerung TEV,Actuator control TEV,Sterowanie siłownikiem TEV,2026-04-03 01:38:43
+ME9K_NG4,STEUERN_TEV_AUS,Stellgliedansteuerung TEV,Actuator control TEV,Sterowanie siłownikiem TEV,2026-04-03 01:38:45
+ME9K_NG4,STEUERN_KFK,Stellgliedansteuerung KFK,Actuator control KFK,Sterowanie siłownikiem KFK,2026-04-03 01:38:50
+ME9K_NG4,STEUERN_KFK_AUS,Stellgliedansteuerung KFK,Actuator control KFK,Sterowanie siłownikiem KFK,2026-04-03 01:38:53
+ME9K_NG4,STEUERN_SLV,Stellgliedansteuerung SLV,Actuator control SLV,Sterowanie siłownikiem SLV,2026-04-03 01:38:56
+ME9K_NG4,STEUERN_SLV_AUS,Stellgliedansteuerung SLV,Actuator control SLV,Sterowanie siłownikiem SLV,2026-04-03 01:38:59
+ME9K_NG4,STEUERN_EKP,Stellgliedansteuerung EKP,Actuator control EKP,Sterowanie siłownikiem EKP,2026-04-03 01:39:03
+ME9K_NG4,STEUERN_EKP_AUS,Stellgliedansteuerung EKP,Actuator control EKP,Sterowanie siłownikiem EKP,2026-04-03 01:39:06
+ME9K_NG4,STEUERN_HLS1,Stellgliedansteuerung Lambdasondenheizung1,Actuator control for lambda probe heating1,Sterowanie siłownikiem ogrzewania sondy lambda1,2026-04-03 01:39:09
+ME9K_NG4,STEUERN_HLS1_AUS,Stellgliedansteuerung Lambdasondeheizung 1 aus,Actuator control for lambda sensor heater 1 off,Sterowanie siłownikiem podgrzewacza sondy lambda 1 wyłączone,2026-04-03 01:39:12
+ME9K_NG4,STEUERN_HLS2,Stellgliedansteuerung Lambdasondenheizung 2,Actuator control for lambda sensor heater 2,Sterowanie siłownikiem podgrzewacza z sondą lambda 2,2026-04-03 01:39:16
+ME9K_NG4,STEUERN_HLS2_AUS,Stellgliedansteuerung Lambdasondeheizung 2 aus,Actuator control for lambda sensor heater 2 off,Sterowanie siłownikiem podgrzewacza sondy lambda 2 wyłączone,2026-04-03 01:39:19
+ME9K_NG4,STEUERN_HLS3,Stellgliedansteuerung Lambdasondenheizung3,Actuator control for lambda probe heating3,Sterowanie siłownikiem ogrzewania sondy lambda3,2026-04-03 01:39:22
+ME9K_NG4,STEUERN_HLS3_AUS,Stellgliedansteuerung Lambdasondeheizung 3 aus,Actuator control for lambda sensor heater 3 off,Sterowanie siłownikiem podgrzewacza sondy lambda 3 wyłączone,2026-04-03 01:39:26
+ME9K_NG4,STEUERN_HLS4,Stellgliedansteuerung Lambdasondenheizung 4,Actuator control for lambda probe heating 4,Sterowanie siłownikiem ogrzewania sondy lambda 4,2026-04-03 01:39:30
+ME9K_NG4,STEUERN_HLS4_AUS,Stellgliedansteuerung Lambdasondeheizung 4 aus,Lambda sensor heater actuator control 4 off,Sterowanie siłownikiem podgrzewacza sondy lambda 4 wyłączone,2026-04-03 01:39:33
+ME9K_NG4,STEUERN_STA,Stellgliedansteuerung Startrelais,Actuator control start relay,Przekaźnik uruchamiania sterowania siłownikiem,2026-04-03 01:39:37
+ME9K_NG4,STEUERN_STA_AUS,Stellgliedansteuerung Startrelais aus,"Actuator control, start relay off","Sterowanie siłownikiem, przekaźnik rozruchu wyłączony",2026-04-03 01:39:41
+ME9K_NG4,STEUERN_KOE,Stellgliedansteuerung KOREL,Actuator control KOREL,Sterowanie siłownikiem KOREL,2026-04-03 01:39:45
+ME9K_NG4,STEUERN_KOE_AUS,Stellgliedansteuerung KOREL aus,Actuator control KOREL off,Sterowanie siłownikiem KOREL wyłączone,2026-04-03 01:39:49
+ME9K_NG4,STEUERN_EBL,Stellgliedansteuerung E-Box-Luefter,Actuator control E-Box fan,Sterowanie siłownikiem wentylatora E-Box,2026-04-03 01:39:53
+ME9K_NG4,STEUERN_EBL_AUS,Stellgliedansteuerung E-Box-Luefter aus,Actuator control E-Box fan off,Sterowanie siłownikiem Wentylator E-Box wyłączony,2026-04-03 01:39:56
+ME9K_NG4,STEUERN_AGK,Stellgliedansteuerung Abgasklappe,Exhaust flap actuator control,Sterowanie siłownikiem klapy wydechowej,2026-04-03 01:40:00
+ME9K_NG4,STEUERN_AGK_AUS,Stellgliedansteuerung Abgasklappe aus,Exhaust flap actuator control off,Sterowanie siłownikiem klapy wydechowej wyłączone,2026-04-03 01:40:03
+ME9K_NG4,STEUERN_DMTLP,Stellgliedansteuerung DM-TL Pumpe,Actuator control DM-TL pump,Sterowanie siłownikiem pompy DM-TL,2026-04-03 01:40:07
+ME9K_NG4,STEUERN_DMTLP_AUS,Stellgliedansteuerung DM-TL Pumpe aus,Actuator control DM-TL pump off,Sterowanie siłownikiem Pompa DM-TL wyłączona,2026-04-03 01:40:10
+ME9K_NG4,STEUERN_DMTLV,Stellgliedansteuerung DM-TL Ventil,Actuator control DM-TL valve,Siłownik sterujący zaworem DM-TL,2026-04-03 01:40:12
+ME9K_NG4,STEUERN_DMTLV_AUS,Stellgliedansteuerung DM-TL Ventil aus,Actuator control DM-TL valve off,Sterowanie siłownikiem Zawór DM-TL wyłączony,2026-04-03 01:40:16
+ME9K_NG4,STEUERN_VANOS_EINLASS,Stellgliedansteuerung Einlass-VANOS,Actuator control inlet VANOS,Siłownik sterujący wlotem VANOS,2026-04-03 01:40:19
+ME9K_NG4,STEUERN_VANOS_EINLASS_AUS,Stellgliedansteuerung Einlass-VANOS freigeben,Enable actuator control inlet VANOS,Włącz wejście sterujące siłownika VANOS,2026-04-03 01:40:22
+ME9K_NG4,STEUERN_VANOS_AUSLASS,Stellgliedansteuerung Auslass-VANOS,Actuator control outlet VANOS,Wyjście sterujące siłownika VANOS,2026-04-03 01:40:25
+ME9K_NG4,STEUERN_VANOS_AUSLASS_AUS,Stellgliedansteuerung Auslass-VANOS freigeben,Enable outlet VANOS actuator control,Włącz sterowanie siłownikiem VANOS na wyjściu,2026-04-03 01:40:28
+ME9K_NG4,STEUERN_DISA,Stellgliedansteuerung DISA,DISA actuator control,Sterowanie siłownikiem DISA,2026-04-03 01:40:31
+ME9K_NG4,STEUERN_DISA_AUS,Stellgliedansteuerung DISA freigeben,Enable actuator control DISA,Włącz sterowanie siłownikiem DISA,2026-04-03 01:40:35
+ME9K_NG4,RAM_LESEN,Beliebige RAM - Zellen auslesen,Read any RAM cells,Przeczytaj wszystkie komórki RAM,2026-04-03 01:40:37
+ME9K_NG4,DATA_ID_LESEN,Data-ID des SG auslesen,Read out data ID of the SG,Odczytaj identyfikator danych SG,2026-04-03 01:40:41
+ME9K_NG4,STOP_COMM,Ende von Comm,End of Comm,Koniec kom,2026-04-03 01:40:44
+ME9K_NG4,RAM_BACKUP,Loeschen der RAM-Backup-Werte,Clear RAM backup values,Wyczyść wartości kopii zapasowej pamięci RAM,2026-04-03 01:40:47
+ME9K_NG4,START_SYSTEMCHECK_LLERH,Diagnosefunktion LL-Erhoehung,Diagnostic function LL increase,Funkcja diagnostyczna Wzrost LL,2026-04-03 01:40:51
+ME9K_NG4,LESEN_SYSTEMCHECK_LLERH,Diagnosefunktion LL-Erhoehung Status lesen,Diagnostic function LL increase read status,Funkcja diagnostyczna LL zwiększa stan odczytu,2026-04-03 01:40:53
+ME9K_NG4,ENDE_SYSTEMCHECK_LLERH,Diagnosefunktion LL-Erhoehung Status lesen,Diagnostic function LL increase read status,Funkcja diagnostyczna LL zwiększa stan odczytu,2026-04-03 01:40:56
+ME9K_NG4,START_SYSTEMCHECK_SLS,Systemdiagnose SLS,SLS system diagnostics,Diagnostyka systemu SLS,2026-04-03 01:41:00
+ME9K_NG4,LESEN_SYSTEMCHECK_SLS,Status Systemdiagnose SLS,Status system diagnosis SLS,Diagnostyka systemu stanu SLS,2026-04-03 01:41:03
+ME9K_NG4,ENDE_SYSTEMCHECK_SLS,Ende Systemdiagnose SLS,End of SLS system diagnosis,Koniec diagnostyki systemu SLS,2026-04-03 01:41:07
+ME9K_NG4,START_SYSTEMCHECK_TEVSYS,Systemtest von TEV,System test from TEV,Test systemu od TEV,2026-04-03 01:41:11
+ME9K_NG4,LESEN_SYSTEMCHECK_TEVSYS,Status Systemtest TEV,Status system test TEV,Test systemu stanu TEV,2026-04-03 01:41:15
+ME9K_NG4,ENDE_SYSTEMCHECK_TEVSYS,Beenden von TEV-Systemtest,Ending TEV System Test,Zakończenie testu systemu TEV,2026-04-03 01:41:18
+ME9K_NG4,START_SYSTEMCHECK_DMTL,Start Systemtest DMTL,Start system test DMTL,Rozpocznij test systemu DMTL,2026-04-03 01:41:21
+ME9K_NG4,LESEN_SYSTEMCHECK_DMTL,Status Systemtest DMTL,Status system test DMTL,Test systemu stanu DMTL,2026-04-03 01:41:25
+ME9K_NG4,ENDE_SYSTEMCHECK_DMTL,Ende Systemtest DM-TL,End of DM-TL system test,Koniec testu systemu DM-TL,2026-04-03 01:41:28
+ME9K_NG4,STEUERN_EVAUSBL,Systemdiagnose Einspritzventile ausblenden,Hide fuel injector system diagnostics,Ukryj diagnostykę układu wtryskiwaczy paliwa,2026-04-03 01:41:32
+ME9K_NG4,STEUERN_EVAUSBL_AUS,Ende Systemtest DM-TL,End of DM-TL system test,Koniec testu systemu DM-TL,2026-04-03 01:41:35
+ME9K_NG4,STEUERN_LSU_TEST,Diagnosefunktion LSU-Test,Diagnostic function LSU test,Funkcja diagnostyczna Test LSU,2026-04-03 01:41:38
+ME9K_NG4,STEUERN_LSU_TEST_ENDE,Diagnosefunktion LLSU-Test,Diagnostic function LLSU test,Funkcja diagnostyczna Test LLSU,2026-04-03 01:41:41
+ME9K_NG4,STEUERN_KOMPR_TEST,Kompresionstest mit VVT und konstanntem DK-Winkel,Compression test with VVT and constant DK angle,Test ściskania przy VVT i stałym kącie DK,2026-04-03 01:41:45
+ME9K_NG4,STEUERN_KOMPR_TEST_ENDE,Beenden Kompresionstestt,End compression test,Zakończ test kompresji,2026-04-03 01:41:48
+ME9K_NG4,STATUS_MESSWERTE,Auslesen von Messwerten,Reading out measured values,Odczyt zmierzonych wartości,2026-04-03 01:41:52
+ME9K_NG4,STATUS_BATTERIEINTEGRATOR,Auslesen von Messwertenund Statusflags,Reading out measured values ​​and status flags,Odczyt zmierzonych wartości i flag stanu,2026-04-03 01:41:56
+ME9K_NG4,STATUS_SCHALTERSTATI,Auslesen von SchalterStatusflags,Reading switch status flags,Odczyt flag stanu przełącznika,2026-04-03 01:42:00
+ME9K_NG4,STATUS_FUNKTIONSSTATI,Auslesen von SchalterStatusflags,Reading switch status flags,Odczyt flag stanu przełącznika,2026-04-03 01:42:03
+ME9K_NG4,STATUS_LAUFUNRUHE,Auslesen von Laufunruhewerten,Reading out unsteady running values,Odczyt niestabilnych wartości roboczych,2026-04-03 01:42:06
+ME9K_NG4,STATUS_DKHFM,Auslesen von DK/HFM-Abgleichswerten,Reading out DK/HFM calibration values,Odczyt wartości kalibracyjnych DK/HFM,2026-04-03 01:42:09
+ME9K_NG4,STEUERN_VVT,Stellgliedansteuerung VVT,Actuator control VVT,Sterowanie siłownikiem VVT,2026-04-03 01:42:12
+ME9K_NG4,STEUERN_VVT_AUS,beenden Stellgliedansteuerung VVT,end actuator control VVT,sterowanie siłownikiem końcowym VVT,2026-04-03 01:42:16
+ME9K_NG4,STATUS_CO,Auslesen des LL-CO-Wertes,Reading out the LL-CO value,Odczyt wartości LL-CO,2026-04-03 01:42:19
+ME9K_NG4,STEUERN_CO,LL-CO-Wert vorgeben,Specify LL-CO value,Określ wartość LL-CO,2026-04-03 01:42:23
+ME9K_NG4,STEUERN_CO_PROGRAMM,LL-CO-WERT programmieren,Program LL-CO-VALUE,Program LL-CO-VALUE,2026-04-03 01:42:26
+ME9K_NG4,FS_LESEN_DETAIL,Fehlerspeicher auslesen,Read out error memory,Odczytaj pamięć błędów,2026-04-03 01:42:28
+ME9K_NG4,STATUS_GEMISCH,Auslesen von Gemischwerten,Reading out mixture values,Odczyt wartości mieszanin,2026-04-03 01:42:32
+ME9K_NG4,STATUS_AUSGAENGE,Auslesen von Ausgaengen,Reading out outputs,Odczytywanie wyjść,2026-04-03 01:42:36
+ME9K_NG4,STATUS_NWGADAPTION,Auslesen der NWG-Adaptionen,Reading out the NWG adaptations,Odczytanie adaptacji NWG,2026-04-03 01:42:38
+ME9K_NG4,STATUS_FASTA1,Auslesen FASTA-Messwertblock 1,Read out FASTA measured value block 1,Odczytaj blok 1 wartości zmierzonej FASTA,2026-04-03 01:42:41
+ME9K_NG4,STATUS_FASTA2,Auslesen FASTA-Messwertblock 2,Read out FASTA measured value block 2,Odczytaj blok 2 wartości zmierzonej FASTA,2026-04-03 01:42:45
+ME9K_NG4,STATUS_FASTA3,Auslesen FASTA-Messwertblock 3,Read out FASTA measured value block 3,Odczytaj blok 3 wartości zmierzonej FASTA,2026-04-03 01:42:48
+ME9K_NG4,STATUS_FASTA4,Auslesen FASTA-Messwertblock 4,Read out FASTA measured value block 4,Odczytaj blok 4 wartości zmierzonej FASTA,2026-04-03 01:42:51
+ME9K_NG4,STATUS_FASTA5,Auslesen FASTA-Messwertblock 5,Read out FASTA measured value block 5,Odczytaj blok 5 wartości zmierzonej FASTA,2026-04-03 01:42:54
+ME9K_NG4,STATUS_FASTA6,Auslesen FASTA-Messwertblock 6,Read out FASTA measured value block 6,Odczytaj blok 6 wartości zmierzonej FASTA,2026-04-03 01:42:57
+ME9K_NG4,STATUS_ADC,Auslesen ADC-Werte,Read out ADC values,Odczytaj wartości ADC,2026-04-03 01:43:00
+ME9K_NG4,STATUS_FGR,FGR-Stati auslesen,Read out FGR status,Odczytaj stan FGR,2026-04-03 01:43:04
+ME9K_NG4,STATUS_READINESS,READINESS - Flags lesen,READINESS - Read flags,GOTOWOŚĆ - Czytaj flagi,2026-04-03 01:43:07
+ME9K_NG4,STATUS_ZYKLUSFLAG,Loeschen des Fehlerspeichers,Clearing the error memory,Kasowanie pamięci błędów,2026-04-03 01:43:09
+ME9K_NG4,STATUS_KVA,Lesen des KVA-Wertes,Reading the KVA value,Odczyt wartości KVA,2026-04-03 01:43:13
+ME9K_NG4,STEUERN_KVA,Loeschen des Fehlerspeichers,Clearing the error memory,Kasowanie pamięci błędów,2026-04-03 01:43:15
+ME9K_NG4,STATUS_MIL,Lesen des MIL-STatus,Reading the MIL status,Odczyt stanu MIL,2026-04-03 01:43:18
+ME9K_NG4,STEUERN_MIL,Loeschen des Fehlerspeichers,Clearing the error memory,Kasowanie pamięci błędów,2026-04-03 01:43:20
+ME9K_NG4,STATUS_BATTERIEORT,Batteriort abfragen,Query Batteriort,Zapytanie Batteriort,2026-04-03 01:43:24
+ME9K_NG4,STEUERN_BATTERIEORT,Batterieort programmieren,Program battery location,Zaprogramuj lokalizację baterii,2026-04-03 01:43:27
+ME9K_NG4,STEUERN_LLABG,LL-Abgleichswerte werden vorgegeben,LL adjustment values ​​are specified,Określono wartości regulacji LL,2026-04-03 01:43:30
+ME9K_NG4,STEUERN_LLABG_PROG,LL-Abgleichswerte werden programmiert,LL calibration values ​​are programmed,Wartości kalibracji LL są zaprogramowane,2026-04-03 01:43:34
+ME9K_NG4,STATUS_LLABG,LL-Abgleichswerte werden gelesen,LL adjustment values ​​are read,Odczytywane są wartości regulacji LL,2026-04-03 01:43:38
+ME9K_NG4,STATUS_VARIANTE,Auslesen der Variante,Reading out the variant,Odczytanie wariantu,2026-04-03 01:43:41
+ME9K_NG4,STATUS_MINHUB,Lesen des MINHUB-Wertes,Reading the MINHUB value,Odczyt wartości MINHUB,2026-04-03 01:43:45
+ME9K_NG4,STEUERN_MINHUB,Vorgeben des MINHUB-Wertes,Specifying the MINHUB value,Określanie wartości MINHUB,2026-04-03 01:43:48
+ME9K_NG4,STEUERN_MINHUB_PROG,Vorgeben des MINHUB-Wertes,Specifying the MINHUB value,Określanie wartości MINHUB,2026-04-03 01:43:51
+ME9K_NG4,STATUS_DBAW,"Lesen des DBAW-Status, Zahlerwerte","Reading DBAW status, payer values","Odczyt statusu DBAW, wartości płatnika",2026-04-03 01:43:54
+ME9K_NG4,STEUERN_GD_VOLLHUB,Umschaltung Motor auf gedrosselt mit Vollhub,Switching the engine to throttled with full stroke,Przełączenie silnika na przepustnicę z pełnym skokiem,2026-04-03 01:43:58
+ME9K_NG4,STATUS_ZUHEIZEN,Lesen von Statuswerten über DIREKTES RAM-Lesen,Reading status values ​​via DIRECT RAM reading,Odczyt wartości stanu poprzez BEZPOŚREDNI odczyt RAM,2026-04-03 01:44:01
+ME9K_NG4,STATUS_GEBERRAD_ADAPTION,Auslesen der NWG-Adaptionen,Reading out the NWG adaptations,Odczytanie adaptacji NWG,2026-04-03 01:44:03
+ME9K_NG4,STATUS_DIGITAL,Auslesen von SchalterStatusflags,Reading switch status flags,Odczyt flag stanu przełącznika,2026-04-03 01:44:06
+ME9K_NG4,STATUS_PWG_POTI_SPANNUNG,Auslesen des Pedalwertgebers,Reading out the pedal value transmitter,Odczyt nadajnika wartości pedału,2026-04-03 01:44:09
+ME9K_NG4,STATUS_SYSTEMCHECK_DMTL,Status Systemtest DMTL,Status system test DMTL,Test systemu stanu DMTL,2026-04-03 01:44:11
+ME9K_NG4,STOP_SYSTEMCHECK_DMTL,Ende Systemtest DM-TL,End of DM-TL system test,Koniec testu systemu DM-TL,2026-04-03 01:44:13
+ME9K_NG4,START_SYSTEMCHECK_TEV_FUNC,Systemtest von TEV,System test from TEV,Test systemu od TEV,2026-04-03 01:44:15
+ME9K_NG4,STATUS_SYSTEMCHECK_TEV_FUNC,Status Systemtest TEV,Status system test TEV,Test systemu stanu TEV,2026-04-03 01:44:17
+ME9K_NG4,STOP_SYSTEMCHECK_TEV_FUNC,Beenden von TEV-Systemtest,Ending TEV System Test,Zakończenie testu systemu TEV,2026-04-03 01:44:20
+ME9K_NG4,START_SYSTEMCHECK_LSU,Systemdiagnose LSU starten,Start LSU system diagnostics,Rozpocznij diagnostykę systemu LSU,2026-04-03 01:44:23
+ME9K_NG4,STATUS_SYSTEMCHECK_LSU,Status Systemdiagnose LSU,LSU system diagnostics status,Stan diagnostyki systemu LSU,2026-04-03 01:44:27
+ME9K_NG4,STOP_SYSTEMCHECK_LSU,Ende Systemdiagnose LSU,End of LSU system diagnosis,Koniec diagnostyki systemu LSU,2026-04-03 01:44:31
+ME9K_NG4,START_SYSTEMCHECK_LSH,Start der Systemdiagnose LSH,Start the LSH system diagnosis,Rozpocznij diagnostykę systemu LSH,2026-04-03 01:44:34
+ME9K_NG4,STATUS_SYSTEMCHECK_LSH,Status LSH-Diagnose auslesen,Read status of LSH diagnosis,Przeczytaj status diagnozy LSH,2026-04-03 01:44:38
+ME9K_NG4,STOP_SYSTEMCHECK_LSH,Ende der Systemdiagnose LSH,End of system diagnosis LSH,Koniec diagnostyki systemu LSH,2026-04-03 01:44:41
+ME9K_NG4,EWS_STARTWERT,EWS-Startwertinitialisierung,EWS seed initialization,Inicjalizacja nasion EWS,2026-04-03 01:44:44
+ME9K_NG4,EWS_EMPFANG,EWS-Empfangsstatus auslesen,Read EWS reception status,Przeczytaj stan odbioru EWS,2026-04-03 01:44:48
+ME9K_NG4,STEUERN_SYNC_MODE,EWS-Startwertinitialisierung,EWS seed initialization,Inicjalizacja nasion EWS,2026-04-03 01:44:50
+ME9K_NG4,STATUS_SYNC_MODE,EWS-Empfangsstatus auslesen,Read EWS reception status,Przeczytaj stan odbioru EWS,2026-04-03 01:44:53
+ME9K_NG4,STATUS_MOTORTEMPERATUR,Auslesen der Motortemperatur,Reading the engine temperature,Odczyt temperatury silnika,2026-04-03 01:44:57
+ME9K_NG4,STATUS_MOTORDREHZAHL,Auslesen der Motordrehzahl,Reading the engine speed,Odczyt prędkości obrotowej silnika,2026-04-03 01:44:59
+ME9K_NG4,STATUS_AN_LUFTTEMPERATUR,Auslesen der Lufttemperatur,Reading the air temperature,Odczyt temperatury powietrza,2026-04-03 01:45:03
+ME9K_NG4,STATUS_LMM_MASSE,Auslesen der Luftmasse,Reading the air mass,Odczyt masy powietrza,2026-04-03 01:45:06
+ME9K_NG4,STATUS_L_SONDE,Auslesen der Lambdasonden Spg.,Reading out the lambda probe voltage.,Odczyt napięcia sondy lambda.,2026-04-03 01:45:09
+ME9K_NG4,STATUS_L_SONDE_2,Auslesen der Lambdasonden Spg. 2,Reading out the lambda probe voltage. 2,Odczyt napięcia sondy lambda. 2,2026-04-03 01:45:12
+ME9K_NG4,STATUS_L_SONDE_H,Auslesen der Lambdasonden Spg.,Reading out the lambda probe voltage.,Odczyt napięcia sondy lambda.,2026-04-03 01:45:15
+ME9K_NG4,STATUS_L_SONDE_2_H,Auslesen der Lambdasonden Spg. Bank2,Reading out the lambda probe voltage. Bank2,Odczyt napięcia sondy lambda. Bank2,2026-04-03 01:45:19
+ME9K_NG4,STATUS_INT,Auslesen der Lambdaregelung,Reading out the lambda control,Odczyt kontroli lambda,2026-04-03 01:45:23
+ME9K_NG4,STATUS_INT_2,Auslesen der Lambdaregelung Bank2,Reading out the lambda control bank2,Odczyt banku kontrolnego lambda2,2026-04-03 01:45:26
+ME9K_NG4,STATUS_ADD,Auslesen des additiven Lambdaregelung,Reading out the additive lambda control,Odczyt addytywnej kontroli lambda,2026-04-03 01:45:29
+ME9K_NG4,STATUS_ADD_2,Auslesen des additiven Lambdaregelung Bank2,Reading out the additive lambda control bank2,Odczyt addytywnego banku kontrolnego lambda2,2026-04-03 01:45:32
+ME9K_NG4,STATUS_MUL,Auslesen des multipikativen Lambdaregelung,Reading out the multipicative lambda control,Odczyt multipikatywnej kontroli lambda,2026-04-03 01:45:35
+ME9K_NG4,STATUS_MUL_2,Auslesen des multipikativen Lambdaregelung Bank2,Reading out the multipicative lambda control bank2,Odczyt multipikatywnego banku kontrolnego lambda2,2026-04-03 01:45:38
+ME9K_NG4,STATUS_UBATT,Auslesen der Batteriespg.,Reading out the battery voltage,Odczyt napięcia akumulatora,2026-04-03 01:45:41
+ME9K_NG4,STATUS_MOTORLAUFUNRUHE,Auslesen von Laufunruhewerten,Reading out unsteady running values,Odczyt niestabilnych wartości roboczych,2026-04-03 01:45:44
+ME9K_NG4,START_SYSTEMCHECK_SEK_LUFT,Systemdiagnose SLS,SLS system diagnostics,Diagnostyka systemu SLS,2026-04-03 01:45:46
+ME9K_NG4,LESEN_SYSTEMCHECK_SEK_LUFT,Status Systemdiagnose SLS,Status system diagnosis SLS,Diagnostyka systemu stanu SLS,2026-04-03 01:45:48
+ME9K_NG4,STOP_SYSTEMCHECK_SEK_LUFT,Ende Systemdiagnose SLS,End of SLS system diagnosis,Koniec diagnostyki systemu SLS,2026-04-03 01:45:51
+ME9K_NG4,STATUS_RAM_LESEN,Beliebige RAM - Zellen auslesen,Read any RAM cells,Przeczytaj wszystkie komórki RAM,2026-04-03 01:45:53
+ME9K_NG4,STATUS_CO_ABGLEICH,Auslesen des LL-CO-Wertes,Reading out the LL-CO value,Odczyt wartości LL-CO,2026-04-03 01:45:55
+ME9K_NG4,STEUERN_CO_ABGLEICH_VERSTELLEN,LL-CO-Wert vorgeben,Specify LL-CO value,Określ wartość LL-CO,2026-04-03 01:45:57
+ME9K_NG4,STEUERN_CO_ABGLEICH_PROGRAMMIEREN,LL-CO-WERT programmieren,Program LL-CO-VALUE,Program LL-CO-VALUE,2026-04-03 01:46:00
+ME9K_NG4,C_FG_LESEN,Auslesen des Pruefstempels und Interpretation als FG-Nummer,Reading out the test stamp and interpreting it as an FG number,Odczytanie stempla testowego i zinterpretowanie go jako numeru FG,2026-04-03 01:46:03
+ME9K_NG4,C_FG_AUFTRAG,Beschreiben des Pruefstempels mit der FG-Nummer,Describe the test stamp with the FG number,Opisz stempel testowy numerem FG,2026-04-03 01:46:06
+ME9K_NG4,C_C_LESEN,Codierdaten lesen,Read coding data,Przeczytaj dane kodowania,2026-04-03 01:46:09
+ME9K_NG4,C_C_AUFTRAG,Codierdaten schreiben und verifizieren,Write and verify coding data,Zapisz i zweryfikuj dane kodowania,2026-04-03 01:46:12
+ME9K_NG4,STATUS_BETRIEBSSTUNDEN,Auslesen des Betriebsstudenzaehlers,Reading out the operating hours counter,Odczyt licznika godzin pracy,2026-04-03 01:46:15
+ME9K_NG4,VARIANTE_LOESCHEN,Loeschen der Varianten,Delete the variants,Usuń warianty,2026-04-03 01:46:19
+ME9K_NG4,SLP_CONFIG,Auslesen des Sekundaersystems anhand des Datenstandes,Reading out the secondary system based on the data status,Odczyt systemu wtórnego na podstawie stanu danych,2026-04-03 01:46:22
+ME9K42,C_FG_SCHREIBEN,Modus  : Default,Mode: Default,Tryb: domyślny,2026-04-05 19:56:57
+ME9K42,FS_HEX_LESEN,Fehlerspeicher auslesen als Hex Dump,Read error memory as hex dump,Odczytaj pamięć błędów jako zrzut szesnastkowy,2026-04-05 19:57:42
+ME9K42,PRUEFSTEMPEL_LESEN,Modus  : Default,,Tryb: domyślny,2026-04-05 19:57:54
+ME9K42,C_CI_LESEN,Modus  : Default,,Tryb: domyślny,2026-04-05 19:57:58
+ME9K42,INFO,Information SGBD,,Informacje SGBD,2026-04-05 19:58:02
+ME9K42,STEUERN_VVT_ANSCHLAG,Lernen der VVT-Anschlaege,Learning the VVT ​​stops,Nauka zatrzymania VVT,2026-04-05 19:58:34
+LWS5,STATUS_DIGITAL,"Bereich: 0, wenn FALSE / 1, wenn TRUE",Range: 0 if FALSE / 1 if TRUE,,2026-04-09 20:13:13
+LWS5,STATUS_SG_DIGITAL,"Bereich: 0, wenn FALSE / 1, wenn TRUE",Range: 0 if FALSE / 1 if TRUE,,2026-04-09 20:13:24
+LWS5,STATUS_SG_ONLINE,Auslesen der analogen Online-Werte des LWS5,Reading out the analog online values ​​of the LWS5,,2026-04-09 20:13:26
+ME9K_5,FS_LESEN_LANG,Fehlerspeicher auslesen,Read out error memory,Odczytaj pamięć błędów,2026-04-10 12:00:05
