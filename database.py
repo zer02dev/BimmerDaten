@@ -23,6 +23,7 @@ class Database:
         self._ensure_translations_schema()
         self._ensure_trc_history_schema()
         self._ensure_trc_favorites_schema()
+        self._ensure_presets_schema()
         self._ensure_sa_translations_schema()
         self._ensure_table_descriptions_schema()
         self.conn.commit()
@@ -124,6 +125,22 @@ class Database:
                 pinned       INTEGER NOT NULL DEFAULT 1,
                 updated_at   TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY (model, module, option_name)
+            );
+            """
+        )
+
+    def _ensure_presets_schema(self) -> None:
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS coding_presets (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                model       TEXT NOT NULL,
+                module      TEXT NOT NULL,
+                changes     TEXT NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now'))
             );
             """
         )
@@ -497,6 +514,62 @@ class Database:
             self.conn.commit()
         except sqlite3.Error:
             return
+
+    def get_presets(self, model: str = "", module: str = "") -> list[dict]:
+        if model and module:
+            rows = self.conn.execute(
+                """SELECT id, name, description, model, module, changes,
+                          created_at, updated_at
+                   FROM coding_presets
+                   WHERE UPPER(model)=UPPER(?) AND UPPER(module)=UPPER(?)
+                   ORDER BY name""",
+                (model, module),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """SELECT id, name, description, model, module, changes,
+                          created_at, updated_at
+                   FROM coding_presets ORDER BY model, module, name"""
+            ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["changes"] = json.loads(d["changes"] or "[]")
+            result.append(d)
+        return result
+
+    def save_preset(
+        self,
+        name: str,
+        description: str,
+        model: str,
+        module: str,
+        changes: list[dict],
+        preset_id: int | None = None,
+    ) -> int:
+        payload = json.dumps(changes, ensure_ascii=False)
+        if preset_id:
+            self.conn.execute(
+                """UPDATE coding_presets
+                   SET name=?, description=?, model=?, module=?, changes=?,
+                       updated_at=datetime('now')
+                   WHERE id=?""",
+                (name, description, model.upper(), module.upper(), payload, preset_id),
+            )
+            self.conn.commit()
+            return preset_id
+        cursor = self.conn.execute(
+            """INSERT INTO coding_presets
+                   (name, description, model, module, changes)
+               VALUES (?, ?, ?, ?, ?)""",
+            (name, description, model.upper(), module.upper(), payload),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid or 0)
+
+    def delete_preset(self, preset_id: int) -> None:
+        self.conn.execute("DELETE FROM coding_presets WHERE id=?", (preset_id,))
+        self.conn.commit()
 
     def get_sa_translation(self, chassis: str, sa_code: str, lang: str) -> Optional[str]:
         lang_map = {
