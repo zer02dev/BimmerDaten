@@ -90,9 +90,15 @@ BimmerDaten is not a replacement for BMW Standard Tools — it works alongside t
 
 ## Installation
 
+### Option 1 — Download (recommended)
+
+Go to the [**Releases**](https://github.com/zer02dev/BimmerDaten/releases) page and download the latest `.exe`. No Python, no dependencies — just run it.
+
+### Option 2 — Run from source
+
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/BimmerDaten.git
+git clone https://github.com/zer02dev/BimmerDaten
 cd BimmerDaten
 
 # 2. Install dependencies
@@ -102,7 +108,7 @@ pip install -r requirements.txt
 python main_window.py
 ```
 
-No build step, no installer. Python 3.10+ and the packages in `requirements.txt` are all you need.
+Requires Python 3.10+.
 
 ---
 
@@ -112,7 +118,6 @@ No build step, no installer. Python 3.10+ and the packages in `requirements.txt`
 2. **Browse jobs** — the left panel lists all jobs in the file; use the search bar to filter
 3. **Inspect a job** — click any job to see its description, arguments, results, and live data parameters in the right panel
 4. **Open a TRC file** — File → Open TRC → load your coding file to view and edit module parameters
-5. **Set up translations** — Settings → point to your NCS Dummy `Translations.csv` for parameter name translations
 
 ---
 
