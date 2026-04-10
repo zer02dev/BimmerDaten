@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QMenu, QGroupBox, QTextEdit, QComboBox, QFrame,
     QSizePolicy, QHeaderView, QTabWidget, QTabBar, QTableWidget,
     QTableWidgetItem, QDialog, QTextBrowser, QMessageBox, QToolButton,
-    QProgressBar
+    QProgressBar, QProgressDialog, QInputDialog
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap
@@ -2265,6 +2265,17 @@ class MainWindow(QMainWindow):
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self._open_file)
         file_menu.addAction(open_action)
+
+        update_menu = file_menu.addMenu("Update Database")
+
+        github_action = update_menu.addAction("From GitHub")
+        github_action.setStatusTip("Download latest translations and presets from GitHub")
+        github_action.triggered.connect(self._update_database_github)
+
+        csv_action = update_menu.addAction("From CSV file...")
+        csv_action.setStatusTip("Import a local CSV seed file into the database")
+        csv_action.triggered.connect(self._update_database_csv)
+
         file_menu.addSeparator()
         exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close)
@@ -2278,6 +2289,101 @@ class MainWindow(QMainWindow):
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    def _update_database_github(self):
+        if not self._db:
+            QMessageBox.warning(self, "Update Database", "Database is not available.")
+            return
+
+        progress = QProgressDialog("Connecting to GitHub...", None, 0, 0, self)
+        progress.setWindowTitle("Update Database")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.show()
+        QApplication.processEvents()
+
+        def on_progress(msg: str):
+            progress.setLabelText(msg)
+            QApplication.processEvents()
+
+        try:
+            results = self._db.update_from_github(progress_callback=on_progress)
+        except Exception as exc:
+            progress.close()
+            QMessageBox.critical(
+                self,
+                "Update Database",
+                f"Failed to connect to GitHub:\n{exc}\n\nCheck your internet connection.",
+            )
+            return
+
+        progress.close()
+
+        lines = []
+        for table, result in results.items():
+            if isinstance(result, int):
+                lines.append(f"  {table}: {result} rows imported")
+            else:
+                lines.append(f"  {table}: {result}")
+
+        QMessageBox.information(
+            self,
+            "Update Database",
+            "Database update complete:\n\n" + "\n".join(lines),
+        )
+
+    def _update_database_csv(self):
+        if not self._db:
+            QMessageBox.warning(self, "Update Database", "Database is not available.")
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select CSV seed file",
+            "",
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not path:
+            return
+
+        import os
+
+        filename = os.path.basename(path).lower().replace(".csv", "")
+        known_tables = [
+            "table_descriptions",
+            "translations",
+            "coding_presets",
+            "sa_translations",
+        ]
+        suggested = filename if filename in known_tables else ""
+
+        table_name, ok = QInputDialog.getItem(
+            self,
+            "Select target table",
+            f"File: {os.path.basename(path)}\n\nImport into which table?",
+            known_tables,
+            current=known_tables.index(suggested) if suggested else 0,
+            editable=False,
+        )
+        if not ok or not table_name:
+            return
+
+        try:
+            count = self._db.import_csv_file(path, table_name)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Update Database",
+                f"Failed to import CSV:\n{exc}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Update Database",
+            f"Import complete.\n\n  {table_name}: {count} rows imported from file.",
+        )
 
     def _open_file(self):
         if not DECODER_AVAILABLE:

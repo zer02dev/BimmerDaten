@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import urllib.error
 from pathlib import Path
 from typing import Optional
 
@@ -27,6 +28,58 @@ class Database:
         self._ensure_sa_translations_schema()
         self._ensure_table_descriptions_schema()
         self.conn.commit()
+        self.apply_seeds()
+
+    def apply_seeds(self) -> None:
+        """Import seed CSV files from ./seeds into matching tables using INSERT OR IGNORE."""
+        import csv
+
+        seeds_dir = Path(__file__).resolve().parent / "seeds"
+        try:
+            seed_files = sorted(seeds_dir.glob("*.csv"))
+        except Exception:
+            return
+
+        for seed_file in seed_files:
+            try:
+                table_name = seed_file.stem
+
+                with seed_file.open("r", encoding="utf-8", newline="") as handle:
+                    reader = csv.DictReader(handle)
+                    if not reader.fieldnames:
+                        continue
+
+                    existing_cols = [
+                        row[1]
+                        for row in self.conn.execute(
+                            f"PRAGMA table_info({table_name})"
+                        ).fetchall()
+                    ]
+                    if not existing_cols:
+                        continue
+
+                    csv_cols = [col for col in reader.fieldnames if col in existing_cols]
+                    if not csv_cols:
+                        continue
+
+                    placeholders = ", ".join("?" * len(csv_cols))
+                    col_list = ", ".join(csv_cols)
+                    sql = (
+                        f"INSERT OR IGNORE INTO {table_name} ({col_list}) "
+                        f"VALUES ({placeholders})"
+                    )
+
+                    for row in reader:
+                        try:
+                            values = [row.get(col) for col in csv_cols]
+                            self.conn.execute(sql, values)
+                        except Exception:
+                            continue
+
+                    self.conn.commit()
+            except Exception:
+                # Never crash app startup if a seed file is invalid.
+                continue
 
     def _ensure_translations_schema(self) -> None:
         self.conn.execute(
@@ -621,6 +674,130 @@ class Database:
             ),
         )
         self.conn.commit()
+
+    def update_from_github(self, progress_callback=None) -> dict:
+        """
+        Fetch seed CSVs from GitHub and import new rows via INSERT OR IGNORE.
+        Returns dict: {table_name: rows_processed} for each file.
+        """
+        import csv
+        import io
+        import urllib.request
+
+        base_url = "https://raw.githubusercontent.com/zer02dev/BimmerDaten/main/seeds/"
+        seed_files = {
+            "table_descriptions.csv": "table_descriptions",
+            "translations.csv": "translations",
+            "coding_presets.csv": "coding_presets",
+            "sa_translations.csv": "sa_translations",
+        }
+
+        results: dict[str, int | str] = {}
+
+        for filename, table_name in seed_files.items():
+            if progress_callback:
+                progress_callback(f"Fetching {filename}...")
+
+            url = base_url + filename
+            try:
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    content = resp.read().decode("utf-8")
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    results[table_name] = "not available"
+                else:
+                    results[table_name] = f"ERROR: HTTP {exc.code}"
+                continue
+            except Exception as exc:
+                results[table_name] = f"ERROR: {exc}"
+                continue
+
+            reader = csv.DictReader(io.StringIO(content))
+            if not reader.fieldnames:
+                results[table_name] = "empty"
+                continue
+
+            try:
+                existing_cols = [
+                    row[1]
+                    for row in self.conn.execute(
+                        f"PRAGMA table_info({table_name})"
+                    ).fetchall()
+                ]
+            except Exception:
+                results[table_name] = "ERROR: table not found"
+                continue
+
+            csv_cols = [c for c in reader.fieldnames if c in existing_cols]
+            if not csv_cols:
+                results[table_name] = "no matching columns"
+                continue
+
+            placeholders = ", ".join("?" * len(csv_cols))
+            col_list = ", ".join(csv_cols)
+            sql = f"INSERT OR IGNORE INTO {table_name} ({col_list}) VALUES ({placeholders})"
+
+            count = 0
+            for row in reader:
+                values = [row.get(col) for col in csv_cols]
+                try:
+                    self.conn.execute(sql, values)
+                    count += 1
+                except Exception:
+                    pass
+
+            self.conn.commit()
+            results[table_name] = count
+
+        return results
+
+    def import_csv_file(self, file_path: str, table_name: str) -> int:
+        """
+        Import a local CSV file into the specified table using INSERT OR IGNORE.
+        CSV must have a header row with column names.
+        Only columns present in both the CSV and the DB table are imported.
+        Returns number of rows processed.
+        Raises exception on file or schema error.
+        """
+        import csv
+
+        with open(file_path, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            if not reader.fieldnames:
+                raise ValueError("CSV file has no header row.")
+
+            existing_cols = [
+                row[1]
+                for row in self.conn.execute(
+                    f"PRAGMA table_info({table_name})"
+                ).fetchall()
+            ]
+            if not existing_cols:
+                raise ValueError(f"Table '{table_name}' does not exist in the database.")
+
+            csv_cols = [c for c in reader.fieldnames if c in existing_cols]
+            if not csv_cols:
+                raise ValueError(
+                    f"No matching columns between CSV and table '{table_name}'.\n"
+                    f"CSV columns: {list(reader.fieldnames)}\n"
+                    f"Table columns: {existing_cols}"
+                )
+
+            placeholders = ", ".join("?" * len(csv_cols))
+            col_list = ", ".join(csv_cols)
+            sql = f"INSERT OR IGNORE INTO {table_name} ({col_list}) VALUES ({placeholders})"
+
+            count = 0
+            for row in reader:
+                values = [row.get(col) for col in csv_cols]
+                try:
+                    self.conn.execute(sql, values)
+                    count += 1
+                except Exception:
+                    pass
+
+            self.conn.commit()
+            return count
 
     def close(self):
         try:

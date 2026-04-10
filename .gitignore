@@ -65,6 +65,5 @@ Thumbs.db
 # Project-specific generated/runtime files
 *.trc
 *.000
-*.dat
 *.MAN
 test.py
