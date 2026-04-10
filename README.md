@@ -62,6 +62,7 @@ BimmerDaten is not a replacement for BMW Standard Tools — it works alongside t
 - Change tracking — see exactly what you changed vs. the original
 - Coding history with comparison and filtering
 - PDF export of coding reports
+- Coding presets — save, apply and share named coding configurations
 
 ### Translations
 - **EDIABAS jobs** — own offline DB (DE → EN, PL) with automatic online fallback; online results are saved locally for future use
@@ -166,6 +167,14 @@ This software is provided as-is, without warranty of any kind.
 When in doubt — don't code.
 
 ---
+
+## Community Presets
+
+Have a useful coding preset? Share it with the community via 
+[GitHub Issues](../../issues) — attach an exported `.csv` file 
+from DB Browser and describe what it does. 
+The best presets will be added to the official database.
+
 
 ## Contributing
 
