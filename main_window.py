@@ -497,6 +497,7 @@ class JobListPanel(QWidget):
 
 class JobDetailPanel(QWidget):
     languageChanged = pyqtSignal(str)
+    showAllTablesRequested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -622,6 +623,26 @@ class JobDetailPanel(QWidget):
         self.params_sub_tabs = QTabWidget()
         self.params_sub_tabs.setTabPosition(QTabWidget.TabPosition.North)
         params_layout.addWidget(self.params_sub_tabs)
+
+        tables_info_row = QHBoxLayout()
+        tables_info_row.setContentsMargins(0, 4, 0, 0)
+        tables_info_row.setSpacing(8)
+
+        self._tables_info_label = QLabel("Tables used by this job")
+        self._tables_info_label.setStyleSheet(
+            "font-size: 10px; color: #666666; font-style: italic;"
+        )
+        self._tables_info_label.setVisible(False)
+
+        self._show_all_tables_btn = QPushButton("📋 Show all tables")
+        self._show_all_tables_btn.clicked.connect(self.showAllTablesRequested.emit)
+        self._show_all_tables_btn.setVisible(False)
+
+        tables_info_row.addWidget(self._tables_info_label)
+        tables_info_row.addStretch()
+        tables_info_row.addWidget(self._show_all_tables_btn)
+        params_layout.addLayout(tables_info_row)
+
         self.tabs.addTab(params_widget, "📊 Parameters")
 
         # --- Zakładka: Disassembly ---
@@ -693,6 +714,9 @@ class JobDetailPanel(QWidget):
             "\n".join(job.disassembly) if job.disassembly
             else "; No disassembly"
         )
+
+        self._tables_info_label.setVisible(True)
+        self._show_all_tables_btn.setVisible(True)
 
     def update_language(self, lang: str):
         self._lang = (lang or "de").lower()
@@ -1140,15 +1164,23 @@ class JobDetailPanel(QWidget):
             self.params_sub_tabs.setTabEnabled(0, False)
             return
 
-        tables_sorted = sorted(
-            tables,
-            key=lambda table: 0 if self._table_used_in_job(table.name, job.disassembly) else 1,
-        )
+        used_tables = [
+            t for t in tables
+            if self._table_used_in_job(t.name, job.disassembly)
+        ]
+        used_tables.sort(key=lambda t: t.name)
 
-        for table in tables_sorted:
-            used = self._table_used_in_job(table.name, job.disassembly)
-            tab_title = f"{'🟢' if used else '🔴'} {table.name}"
-            if "BETRIEBSWTAB" in table.name.upper() and used:
+        if not used_tables:
+            placeholder = QWidget()
+            placeholder_layout = QVBoxLayout(placeholder)
+            placeholder_layout.addWidget(QLabel("This job does not use any tables"))
+            self.params_sub_tabs.addTab(placeholder, "This job does not use any tables")
+            self.params_sub_tabs.setTabEnabled(0, False)
+            return
+
+        for table in used_tables:
+            tab_title = table.name
+            if "BETRIEBSWTAB" in table.name.upper():
                 page = build_betriebs_tab(table)
             else:
                 page = build_generic_table_tab(table)
@@ -1158,7 +1190,7 @@ class JobDetailPanel(QWidget):
             self.params_sub_tabs.setTabToolTip(tab_index, tooltip_html)
             self.params_sub_tabs.tabBar().setTabToolTip(tab_index, tooltip_html)
 
-        for tab_index, table in enumerate(tables_sorted):
+        for tab_index, table in enumerate(used_tables):
             button = QToolButton()
             button.setText("?")
             button.setFixedSize(QSize(16, 16))
@@ -1273,6 +1305,8 @@ class JobDetailPanel(QWidget):
                 page.deleteLater()
         self.params_tree = None
         self.dis_text.clear()
+        self._tables_info_label.setVisible(False)
+        self._show_all_tables_btn.setVisible(False)
 
 
 # ---------------------------------------------------------------------------
@@ -1280,11 +1314,15 @@ class JobDetailPanel(QWidget):
 
 class TablesPanel(QWidget):
 
-    def __init__(self, parent=None):
+    def __init__(self, db=None, parent=None):
         super().__init__(parent)
+        self._db = db
         self._tables: list[Table] = []
         self._current_table: Table | None = None
         self._setup_ui()
+
+    def set_db(self, db) -> None:
+        self._db = db
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -1314,6 +1352,24 @@ class TablesPanel(QWidget):
         right_box = QGroupBox("Table preview")
         right_layout = QVBoxLayout(right_box)
 
+        title_row = QHBoxLayout()
+        self._selected_table_label = QLabel("")
+        title_row.addWidget(self._selected_table_label, 1)
+        
+        self._desc_btn = QPushButton("?")
+        self._desc_btn.setFixedWidth(24)
+        self._desc_btn.setEnabled(False)
+        self._desc_btn.setStyleSheet(
+            "QPushButton { font-size: 9px; font-weight: bold;"
+            "  border: 1px solid #888; border-radius: 8px;"
+            "  background: #ddd; color: #333; padding: 0px; }"
+            "QPushButton:hover { background: #bbb; }"
+        )
+        self._desc_btn.setToolTip("Click for table description")
+        self._desc_btn.clicked.connect(self._on_desc_btn_clicked)
+        title_row.addWidget(self._desc_btn)
+        right_layout.addLayout(title_row)
+
         filter_row = QHBoxLayout()
         filter_row.addWidget(QLabel("Filter:"))
         self.filter_edit = QLineEdit()
@@ -1332,6 +1388,61 @@ class TablesPanel(QWidget):
 
         layout.addWidget(left_box, 1)
         layout.addWidget(right_box, 3)
+
+    def _show_desc_popup(self, table_name: str) -> None:
+        desc = self._db.get_table_description(table_name) if self._db else None
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Table: {table_name}")
+        dlg.setMinimumWidth(420)
+        dlg.setWindowFlags(
+            dlg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
+        )
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(0, 0, 0, 12)
+        layout.setSpacing(0)
+
+        header = QLabel(f"  {table_name}")
+        header.setObjectName("title_label")
+        header.setStyleSheet(
+            "background-color: #1a3a5c; color: white;"
+            "font-family: 'Tahoma'; font-size: 12px; font-weight: bold;"
+            "padding: 8px 10px;"
+        )
+        layout.addWidget(header)
+
+        content = QVBoxLayout()
+        content.setContentsMargins(14, 12, 14, 0)
+        content.setSpacing(6)
+
+        if desc:
+            name_lbl = QLabel(desc[0])
+            name_lbl.setStyleSheet(
+                "font-weight: bold; font-size: 11px; color: #1a3a5c;"
+            )
+            name_lbl.setWordWrap(True)
+            content.addWidget(name_lbl)
+            desc_lbl = QLabel(desc[1])
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setStyleSheet("font-size: 10px; color: #333;")
+            content.addWidget(desc_lbl)
+        else:
+            no_data = QLabel("No description available for this table.")
+            no_data.setStyleSheet(
+                "font-size: 10px; color: #888; font-style: italic;"
+            )
+            content.addWidget(no_data)
+
+        layout.addLayout(content)
+
+        ok_btn = QPushButton("OK")
+        ok_btn.setFixedWidth(80)
+        ok_btn.clicked.connect(dlg.accept)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.setContentsMargins(0, 8, 14, 0)
+        layout.addLayout(btn_row)
+        dlg.exec()
 
     def load_tables(self, tables: list[Table]):
         self._tables = tables
@@ -1386,11 +1497,23 @@ class TablesPanel(QWidget):
         if first_child:
             self.tables_tree.setCurrentItem(first_child)
 
+    def _on_desc_btn_clicked(self):
+        if self._current_table:
+            self._show_desc_popup(self._current_table.name)
+
     def _on_table_selected(self, current, previous):
         table = None
         if current:
             table = current.data(0, Qt.ItemDataRole.UserRole)
         self._current_table = table
+        
+        if table:
+            self._selected_table_label.setText(f"Table: {table.name}")
+            self._desc_btn.setEnabled(True)
+        else:
+            self._selected_table_label.setText("")
+            self._desc_btn.setEnabled(False)
+        
         self._apply_filter()
 
     def _apply_filter(self):
@@ -2074,6 +2197,9 @@ class MainWindow(QMainWindow):
         self.job_list_panel = JobListPanel()
         self.job_detail_panel = JobDetailPanel()
         self.job_detail_panel.languageChanged.connect(self._on_language_changed)
+        self.job_detail_panel.showAllTablesRequested.connect(
+            lambda: self.main_tabs.setCurrentWidget(self.tables_panel)
+        )
 
         splitter.addWidget(self.job_list_panel)
         splitter.addWidget(self.job_detail_panel)
@@ -2083,7 +2209,7 @@ class MainWindow(QMainWindow):
         self.main_tabs.addTab(jobs_tab, "💼 Jobs")
 
         # Tab 2: tabele
-        self.tables_panel = TablesPanel()
+        self.tables_panel = TablesPanel(db=self._db)
         self.main_tabs.addTab(self.tables_panel, "📋 Tables")
 
         # Tab 3: modele INPA
