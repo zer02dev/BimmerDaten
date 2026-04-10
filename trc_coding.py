@@ -5,6 +5,7 @@ Panel kodowania NCS Expert oraz narzędzia do pracy z plikami TRC.
 
 from __future__ import annotations
 
+import copy
 import os
 import configparser
 import json
@@ -26,6 +27,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -1489,6 +1491,660 @@ class ModuleDetectWorker(QObject):
             self.failed.emit(str(exc))
 
 
+class PresetEditorDialog(QDialog):
+    def __init__(self, db, coding_panel, preset: dict | None = None, parent=None):
+        super().__init__(parent)
+        self._db = db
+        self._coding_panel = coding_panel
+        self._preset = preset or None
+        self._segments: list[TrcSegment] = copy.deepcopy(getattr(coding_panel, "_segments", []))
+        self._table_entries: list[dict] = copy.deepcopy(getattr(coding_panel, "_table_entries", []))
+        self._module_option_info = copy.deepcopy(getattr(coding_panel, "_module_option_info", {}))
+        self._module_loaded = bool(getattr(coding_panel, "_module_loaded", False))
+        self._option_rows = [index for index, segment in enumerate(self._segments) if segment.kind == "option"]
+        self._row_editable: dict[int, bool] = {row_index: True for row_index in range(len(self._option_rows))}
+        self._filter_text = ""
+
+        if self._preset:
+            self.setWindowTitle("Edytuj preset")
+            self._apply_preset_to_copy(self._preset)
+        else:
+            self.setWindowTitle("Dodaj preset")
+
+        self._build_ui()
+        self._render_table()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.name_edit = QLineEdit(str((self._preset or {}).get("name") or ""))
+        self.description_edit = QLineEdit(str((self._preset or {}).get("description") or ""))
+
+        current_model = str((self._preset or {}).get("model") or getattr(self._coding_panel, "_current_model", "") or "")
+        current_module = str((self._preset or {}).get("module") or getattr(self._coding_panel, "_current_module", "") or "")
+        self.model_edit = QLineEdit(current_model)
+        self.module_edit = QLineEdit(current_module)
+
+        form.addRow("Nazwa:", self.name_edit)
+        form.addRow("Opis:", self.description_edit)
+        form.addRow("Model:", self.model_edit)
+        form.addRow("Moduł:", self.module_edit)
+        layout.addLayout(form)
+
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(4)
+        filter_row.addWidget(QLabel("🔍"))
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Filtruj opcje... (nazwa lub tłumaczenie)")
+        self.search_edit.textChanged.connect(self._on_filter_text_changed)
+        filter_row.addWidget(self.search_edit, 1)
+        clear_button = QPushButton("✕")
+        clear_button.setFixedWidth(24)
+        clear_button.clicked.connect(self.search_edit.clear)
+        filter_row.addWidget(clear_button)
+        layout.addLayout(filter_row)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels([
+            "★",
+            "Nr",
+            "Opcja",
+            "Tłumaczenie opcji",
+            "Wartość",
+            "Tłumaczenie wartości",
+            "Zmieniono",
+        ])
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setWordWrap(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setStretchLastSection(False)
+        layout.addWidget(self.table, 1)
+
+        button_row = QHBoxLayout()
+        button_row.addStretch()
+        save_button = QPushButton("Zapisz")
+        cancel_button = QPushButton("Anuluj")
+        save_button.clicked.connect(self._on_save)
+        cancel_button.clicked.connect(self.reject)
+        button_row.addWidget(save_button)
+        button_row.addWidget(cancel_button)
+        layout.addLayout(button_row)
+
+    def _apply_preset_to_copy(self, preset: dict):
+        option_map: dict[str, TrcSegment] = {}
+        for segment in self._segments:
+            if segment.kind != "option":
+                continue
+            option_map[segment.option.strip().upper()] = segment
+
+        for change in (preset.get("changes") or []):
+            option_name = str(change.get("option") or "").strip().upper()
+            target_value = str(change.get("value") or "").strip()
+            if not option_name:
+                continue
+            segment = option_map.get(option_name)
+            if segment is not None:
+                segment.value = target_value
+
+    def _build_fallback_table_entries(self) -> list[dict]:
+        return [
+            {
+                "kind": "option",
+                "segment_index": segment_index,
+                "option_index": option_index,
+                "group": "",
+            }
+            for option_index, segment_index in enumerate(self._option_rows)
+        ]
+
+    def _ensure_table_entries(self):
+        if self._table_entries:
+            return
+        self._table_entries = self._build_fallback_table_entries()
+
+    def _render_table(self):
+        self._ensure_table_entries()
+        self.table.setRowCount(len(self._table_entries))
+        self.table.clearContents()
+        self.table.clearSpans()
+
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") == "group":
+                group_name = entry.get("group", "")
+                header_text = f"── {group_name} ──"
+                header_item = QTableWidgetItem(header_text)
+                header_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                header_item.setBackground(QColor("#D4D0C8"))
+                header_item.setForeground(QColor("#000000"))
+                font = header_item.font()
+                font.setBold(True)
+                header_item.setFont(font)
+                self.table.setItem(row_index, 0, header_item)
+                self.table.setSpan(row_index, 0, 1, self.table.columnCount())
+                continue
+
+            segment_index = int(entry.get("segment_index", -1))
+            option_index = int(entry.get("option_index", -1))
+            if segment_index < 0 or segment_index >= len(self._segments):
+                continue
+
+            segment = self._segments[segment_index]
+            editable = self._row_editable.get(option_index, True)
+
+            favorite_item = QTableWidgetItem("☆")
+            favorite_item.setFlags(favorite_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            favorite_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            favorite_item.setForeground(QColor("#888888"))
+
+            number_item = QTableWidgetItem(str(option_index + 1))
+            number_item.setFlags(number_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            option_item = QTableWidgetItem(segment.option)
+            option_item.setFlags(option_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            translation_item = QTableWidgetItem(self._coding_panel._translator.translate(segment.option))
+            translation_item.setFlags(translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            option_name_upper = segment.option.strip().upper()
+            params = []
+            if self._module_loaded:
+                option_info = self._module_option_info.get(option_name_upper, {})
+                params = option_info.get("params", []) or []
+
+            if self._module_loaded:
+                if editable and params:
+                    value_editor = self._build_value_combo(row_index, segment.value, params)
+                    self.table.setCellWidget(row_index, 4, value_editor)
+                else:
+                    value_item = QTableWidgetItem(segment.value)
+                    value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    value_item.setForeground(QColor("#888888"))
+                    self.table.setItem(row_index, 4, value_item)
+            else:
+                value_editor = QLineEdit(segment.value)
+                value_editor.textChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text))
+                value_editor.setMinimumWidth(180)
+                value_editor.setReadOnly(not editable)
+                self.table.setCellWidget(row_index, 4, value_editor)
+
+            value_translation_item = QTableWidgetItem(self._coding_panel._translator.translate(segment.value))
+            value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            changed_item = QTableWidgetItem("Nie")
+            changed_item.setFlags(changed_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            self.table.setItem(row_index, 0, favorite_item)
+            self.table.setItem(row_index, 1, number_item)
+            self.table.setItem(row_index, 2, option_item)
+            self.table.setItem(row_index, 3, translation_item)
+            self.table.setItem(row_index, 5, value_translation_item)
+            self.table.setItem(row_index, 6, changed_item)
+            self._apply_row_style(row_index)
+
+        self.table.resizeColumnsToContents()
+        self.table.setColumnWidth(0, 36)
+        self._apply_table_filter()
+
+    def _on_filter_text_changed(self, text: str):
+        self._filter_text = (text or "").strip().casefold()
+        self._apply_table_filter()
+
+    def _apply_table_filter(self):
+        if not self._table_entries:
+            return
+
+        query = (self._filter_text or "").strip()
+        if not query:
+            for row_index in range(len(self._table_entries)):
+                self.table.setRowHidden(row_index, False)
+            return
+
+        group_row_visible: dict[int, bool] = {}
+        option_row_visible: dict[int, bool] = {}
+        current_group_row: int | None = None
+
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") == "group":
+                group_row_visible[row_index] = False
+                current_group_row = row_index
+                continue
+
+            segment_index = int(entry.get("segment_index", -1))
+            if segment_index < 0 or segment_index >= len(self._segments):
+                option_row_visible[row_index] = False
+                continue
+
+            segment = self._segments[segment_index]
+            option_name = segment.option or ""
+            option_translation = self._coding_panel._translator.translate(option_name)
+            is_match = query in option_name.casefold() or query in option_translation.casefold()
+            option_row_visible[row_index] = is_match
+
+            if is_match and entry.get("group") and current_group_row is not None:
+                group_row_visible[current_group_row] = True
+
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") == "group":
+                self.table.setRowHidden(row_index, not group_row_visible.get(row_index, False))
+            else:
+                self.table.setRowHidden(row_index, not option_row_visible.get(row_index, False))
+
+    def _build_value_combo(self, row_index: int, current_value: str, params: list[dict]) -> QComboBox:
+        combo = QComboBox()
+        combo.setMinimumWidth(180)
+        combo.setEditable(False)
+
+        names = [str(param.get("name", "")).strip() for param in params if str(param.get("name", "")).strip()]
+        if current_value not in names:
+            combo.addItem(f"⚠️ {current_value}")
+            combo.setItemData(0, f"{current_value} (unknown)", Qt.ItemDataRole.ToolTipRole)
+
+        for param in params:
+            name = str(param.get("name", "")).strip()
+            if not name:
+                continue
+            data_value = int(param.get("data", 0)) & 0xFF
+            combo.addItem(name)
+            combo.setItemData(combo.count() - 1, f"{name} (0x{data_value:02X})", Qt.ItemDataRole.ToolTipRole)
+
+        target_index = combo.findText(current_value)
+        if target_index >= 0:
+            combo.setCurrentIndex(target_index)
+
+        combo.currentTextChanged.connect(lambda text, row=row_index: self._on_value_changed(row, text.replace("⚠️ ", "")))
+        return combo
+
+    def _on_value_changed(self, row_index: int, text: str):
+        if row_index < 0 or row_index >= len(self._table_entries):
+            return
+        entry = self._table_entries[row_index]
+        if entry.get("kind") != "option":
+            return
+
+        option_index = int(entry.get("option_index", -1))
+        if option_index < 0 or not self._row_editable.get(option_index, True):
+            return
+
+        segment_index = int(entry.get("segment_index", -1))
+        if segment_index < 0 or segment_index >= len(self._segments):
+            return
+
+        segment = self._segments[segment_index]
+        segment.value = text
+
+        value_item = self.table.item(row_index, 5)
+        if value_item:
+            value_item.setText(self._coding_panel._translator.translate(text))
+
+        self._apply_row_style(row_index)
+
+    def _apply_row_style(self, row_index: int):
+        if row_index < 0 or row_index >= len(self._table_entries):
+            return
+        entry = self._table_entries[row_index]
+        if entry.get("kind") != "option":
+            return
+
+        segment_index = int(entry.get("segment_index", -1))
+        option_index = int(entry.get("option_index", -1))
+        if segment_index < 0 or segment_index >= len(self._segments):
+            return
+
+        segment = self._segments[segment_index]
+        changed = segment.value != segment.original_value
+        editable = self._row_editable.get(option_index, True)
+
+        changed_color = QColor("#CDEFC8")
+        locked_color = QColor("#E0E0E0")
+
+        for column in range(self.table.columnCount()):
+            item = self.table.item(row_index, column)
+            if item:
+                if not editable:
+                    item.setBackground(locked_color)
+                    item.setForeground(QColor("#606060"))
+                elif changed:
+                    item.setBackground(changed_color)
+                    item.setForeground(QColor("#000000"))
+                else:
+                    item.setBackground(QColor("#FFFFFF"))
+                    item.setForeground(QColor("#000000"))
+
+        value_widget = self.table.cellWidget(row_index, 4)
+        if isinstance(value_widget, QLineEdit):
+            if not editable:
+                value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
+            elif changed:
+                value_widget.setStyleSheet("background-color: #CDEFC8; color: #000000;")
+            else:
+                value_widget.setStyleSheet("")
+        elif isinstance(value_widget, QComboBox):
+            if not editable:
+                value_widget.setStyleSheet("background-color: #E0E0E0; color: #606060;")
+            elif changed:
+                value_widget.setStyleSheet("background-color: #CDEFC8; color: #000000;")
+            else:
+                value_widget.setStyleSheet("")
+
+        status_item = self.table.item(row_index, 6)
+        if status_item:
+            status_item.setText("Tak" if changed and editable else "Nie")
+
+        self.table.resizeRowToContents(row_index)
+
+    def _sync_values_from_widgets(self):
+        for row_index, entry in enumerate(self._table_entries):
+            if entry.get("kind") != "option":
+                continue
+
+            segment_index = int(entry.get("segment_index", -1))
+            if segment_index < 0 or segment_index >= len(self._segments):
+                continue
+
+            widget = self.table.cellWidget(row_index, 4)
+            if isinstance(widget, QLineEdit):
+                self._segments[segment_index].value = widget.text()
+            elif isinstance(widget, QComboBox):
+                value = widget.currentText()
+                if value.startswith("⚠️ "):
+                    value = value[3:].strip()
+                self._segments[segment_index].value = value
+            else:
+                value_item = self.table.item(row_index, 4)
+                if value_item:
+                    self._segments[segment_index].value = value_item.text()
+
+    def _on_save(self):
+        name = self.name_edit.text().strip()
+        description = self.description_edit.text().strip()
+        model = self.model_edit.text().strip()
+        module = self.module_edit.text().strip()
+
+        if not name:
+            QMessageBox.warning(self, "Preset", "Nazwa presetu jest wymagana.")
+            return
+        if not model:
+            QMessageBox.warning(self, "Preset", "Model jest wymagany.")
+            return
+        if not module:
+            QMessageBox.warning(self, "Preset", "Moduł jest wymagany.")
+            return
+
+        self._sync_values_from_widgets()
+        changes: list[dict] = []
+        for segment in self._segments:
+            if segment.kind != "option":
+                continue
+            if segment.value == segment.original_value:
+                continue
+            changes.append(
+                {
+                    "option": segment.option.strip(),
+                    "value": segment.value.strip(),
+                }
+            )
+
+        if not changes:
+            QMessageBox.warning(self, "Preset", "Nie wprowadzono żadnych zmian.")
+            return
+
+        preset_id = None
+        if self._preset:
+            preset_id = int(self._preset.get("id") or 0) or None
+
+        self._db.save_preset(name, description, model, module, changes, preset_id=preset_id)
+        self.accept()
+
+
+class PresetsPanel(QGroupBox):
+    def __init__(self, coding_panel, db, parent=None):
+        super().__init__("Presety", parent)
+        self._coding_panel = coding_panel
+        self._db = db
+        self._current_model = ""
+        self._current_module = ""
+        self._build_ui()
+        self.refresh()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        self.list_widget = QListWidget()
+        self.list_widget.currentItemChanged.connect(self._update_button_states)
+        layout.addWidget(self.list_widget, 1)
+
+        self.load_button = QPushButton("Załaduj preset")
+        self.view_edit_button = QPushButton("Podejrzyj / Edytuj")
+        self.add_button = QPushButton("Dodaj preset")
+        self.delete_button = QPushButton("Usuń preset")
+
+        self.load_button.clicked.connect(self._on_load_preset)
+        self.view_edit_button.clicked.connect(self._on_view_edit)
+        self.add_button.clicked.connect(self._on_add)
+        self.delete_button.clicked.connect(self._on_delete)
+
+        layout.addWidget(self.load_button)
+        layout.addWidget(self.view_edit_button)
+        layout.addWidget(self.add_button)
+        layout.addWidget(self.delete_button)
+
+    def _selected_preset(self) -> dict | None:
+        item = self.list_widget.currentItem()
+        if not item:
+            return None
+        preset = item.data(Qt.ItemDataRole.UserRole)
+        return preset if isinstance(preset, dict) else None
+
+    def _raw_trc_content(self) -> str:
+        value = getattr(self._coding_panel, "_trc_content", None)
+        if value is None:
+            value = getattr(self._coding_panel, "_current_trc_content", "")
+        return str(value or "")
+
+    def _update_button_states(self):
+        has_selection = self._selected_preset() is not None
+        has_trc = bool(self._raw_trc_content().strip())
+        self.load_button.setEnabled(has_selection)
+        self.view_edit_button.setEnabled(has_selection)
+        self.delete_button.setEnabled(has_selection)
+        self.add_button.setEnabled(has_trc)
+
+    def refresh(self, model: str = "", module: str = ""):
+        if model:
+            self._current_model = model
+        if module:
+            self._current_module = module
+
+        self.list_widget.clear()
+        presets = self._db.get_presets(model, module)
+        for preset in presets:
+            name = str(preset.get("name") or "")
+            item_model = str(preset.get("model") or "")
+            item_module = str(preset.get("module") or "")
+            item = QListWidgetItem(f"{name}\n({item_model} / {item_module})")
+            item.setData(Qt.ItemDataRole.UserRole, preset)
+            item.setToolTip(str(preset.get("description") or ""))
+            self.list_widget.addItem(item)
+
+        self._update_button_states()
+
+    def _collect_conflicts(self, preset: dict) -> tuple[list[dict], list[dict]]:
+        conflicts: list[dict] = []
+        applicable: list[dict] = []
+
+        for change in (preset.get("changes") or []):
+            option_name = str(change.get("option") or "").strip()
+            target_value = str(change.get("value") or "").strip()
+            if not option_name:
+                continue
+
+            matched_row = -1
+            for row_index in range(self._coding_panel.trc_table.rowCount()):
+                option_item = self._coding_panel.trc_table.item(row_index, 2)
+                if not option_item:
+                    continue
+                if option_item.text().strip().upper() == option_name.upper():
+                    matched_row = row_index
+                    break
+
+            if matched_row < 0 or matched_row >= len(self._coding_panel._table_entries):
+                continue
+
+            entry = self._coding_panel._table_entries[matched_row]
+            if entry.get("kind") != "option":
+                continue
+
+            segment_index = entry.get("segment_index")
+            segment = self._coding_panel._segments[segment_index]
+            current_value = str(segment.value or "").strip()
+            if current_value != target_value:
+                conflicts.append(
+                    {
+                        "row_index": matched_row,
+                        "option": option_name,
+                        "current": current_value,
+                        "preset": target_value,
+                    }
+                )
+            applicable.append(
+                {
+                    "row_index": matched_row,
+                    "option": option_name,
+                    "preset": target_value,
+                }
+            )
+
+        return conflicts, applicable
+
+    def _ask_conflicts_action(self, conflicts: list[dict]) -> str:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Konflikty presetu")
+        dialog.setModal(True)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        layout.addWidget(QLabel("Wykryto konflikty wartości. Wybierz akcję:"))
+
+        table = QTableWidget()
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["Opcja", "Aktualna wartość", "Wartość z presetu"])
+        table.setRowCount(len(conflicts))
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setStretchLastSection(True)
+
+        for row_index, conflict in enumerate(conflicts):
+            table.setItem(row_index, 0, QTableWidgetItem(str(conflict.get("option") or "")))
+            table.setItem(row_index, 1, QTableWidgetItem(str(conflict.get("current") or "")))
+            table.setItem(row_index, 2, QTableWidgetItem(str(conflict.get("preset") or "")))
+
+        layout.addWidget(table, 1)
+
+        action_holder = {"value": "cancel"}
+        button_row = QHBoxLayout()
+        button_row.addStretch()
+
+        yes_button = QPushButton("Tak")
+        no_button = QPushButton("Nie")
+        cancel_button = QPushButton("Anuluj")
+
+        yes_button.clicked.connect(lambda: action_holder.update({"value": "all"}) or dialog.accept())
+        no_button.clicked.connect(lambda: action_holder.update({"value": "non_conflicting"}) or dialog.accept())
+        cancel_button.clicked.connect(lambda: action_holder.update({"value": "cancel"}) or dialog.reject())
+
+        button_row.addWidget(yes_button)
+        button_row.addWidget(no_button)
+        button_row.addWidget(cancel_button)
+        layout.addLayout(button_row)
+
+        dialog.exec()
+        return action_holder["value"]
+
+    def _apply_changes(self, changes: list[dict]):
+        for change in changes:
+            row_index = int(change.get("row_index", -1))
+            new_value = str(change.get("preset") or "")
+            if row_index < 0:
+                continue
+
+            widget = self._coding_panel.trc_table.cellWidget(row_index, 4)
+            if isinstance(widget, QComboBox):
+                widget.setCurrentText(new_value)
+            elif isinstance(widget, QLineEdit):
+                widget.setText(new_value)
+
+            self._coding_panel._on_value_changed(row_index, new_value)
+
+    def _on_load_preset(self):
+        preset = self._selected_preset()
+        if not preset:
+            return
+
+        conflicts, applicable = self._collect_conflicts(preset)
+        if not applicable:
+            QMessageBox.information(self, "Preset", "Brak pasujących opcji do załadowania.")
+            return
+
+        if conflicts:
+            action = self._ask_conflicts_action(conflicts)
+            if action == "cancel":
+                return
+            if action == "all":
+                self._apply_changes(applicable)
+                return
+
+            conflicting_rows = {int(conflict.get("row_index", -1)) for conflict in conflicts}
+            non_conflicting = [item for item in applicable if int(item.get("row_index", -1)) not in conflicting_rows]
+            self._apply_changes(non_conflicting)
+            return
+
+        self._apply_changes(applicable)
+
+    def _on_view_edit(self):
+        preset = self._selected_preset()
+        if not preset:
+            return
+
+        dialog = PresetEditorDialog(db=self._db, coding_panel=self._coding_panel, preset=preset, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.refresh(self._current_model, self._current_module)
+
+    def _on_add(self):
+        dialog = PresetEditorDialog(db=self._db, coding_panel=self._coding_panel, preset=None, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.refresh(self._current_model, self._current_module)
+
+    def _on_delete(self):
+        preset = self._selected_preset()
+        if not preset:
+            return
+
+        preset_name = str(preset.get("name") or "")
+        answer = QMessageBox.question(
+            self,
+            "Preset",
+            f"Czy na pewno chcesz usunąć preset '{preset_name}'?",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self._db.delete_preset(int(preset.get("id") or 0))
+        self.refresh(self._current_model, self._current_module)
+
+
 class CodingPanel(QWidget):
     def __init__(self, db: Database | None = None, parent=None):
         super().__init__(parent)
@@ -1580,6 +2236,10 @@ class CodingPanel(QWidget):
         self.load_trc_button.clicked.connect(self.load_selected_trc)
         self.load_trc_button.setEnabled(True)
         left_layout.addWidget(self.load_trc_button)
+
+        self._presets_panel = PresetsPanel(coding_panel=self, db=self._db)
+        left_layout.addWidget(self._presets_panel)
+
         left_layout.addStretch(1)
 
         self.refresh_button = QPushButton("🔄 Odśwież")
@@ -1905,6 +2565,8 @@ class CodingPanel(QWidget):
         self.module_combo.setEnabled(False)
         self.load_trc_button.setEnabled(True)
         self.detect_module_button.setEnabled(False)
+        if hasattr(self, "_presets_panel"):
+            self._presets_panel.refresh(self._current_model, self._current_module)
 
         daten_path = Path(self._paths.daten_path)
         if daten_path.exists():
@@ -1935,6 +2597,8 @@ class CodingPanel(QWidget):
             self._module_options = set()
             self._render_table()
             self.load_trc_button.setEnabled(False)
+            if hasattr(self, "_presets_panel"):
+                self._presets_panel.refresh(self._current_model, self._current_module)
             return
 
         if select_first:
@@ -1942,6 +2606,8 @@ class CodingPanel(QWidget):
         else:
             self.model_combo.setCurrentIndex(-1)
             self.context_label.setText("Najpierw załaduj TRC, potem wybierz model")
+        if hasattr(self, "_presets_panel"):
+            self._presets_panel.refresh(self._current_model, self._current_module)
 
     def _on_model_changed(self, index: int):
         if index < 0:
@@ -1955,6 +2621,8 @@ class CodingPanel(QWidget):
         self._favorite_options = set()
         self._module_loaded = False
         self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
+        if hasattr(self, "_presets_panel"):
+            self._presets_panel.refresh(self._current_model, self._current_module)
         if self._segments:
             self._render_table()
         self.module_combo.blockSignals(True)
@@ -1983,6 +2651,8 @@ class CodingPanel(QWidget):
             self._module_option_info = {}
             self._favorite_options = set()
             self._module_loaded = False
+            if hasattr(self, "_presets_panel"):
+                self._presets_panel.refresh(self._current_model, self._current_module)
             if self._segments:
                 self._row_editable = {row_index: True for row_index in range(len(self._option_rows))}
                 self._render_table()
@@ -1992,6 +2662,8 @@ class CodingPanel(QWidget):
         self._current_module_file = module_file
         self._current_module = module_file.split(".", 1)[0].upper() if module_file else ""
         self._load_favorites_for_current_module()
+        if hasattr(self, "_presets_panel"):
+            self._presets_panel.refresh(self._current_model, self._current_module)
 
         cache_key = (self._current_model, module_file.upper())
         if cache_key in self._module_options_cache:
@@ -2126,6 +2798,8 @@ class CodingPanel(QWidget):
             self.detect_module_button.setEnabled(False)
             self._render_table()
             self.context_label.setText(f"Nie znaleziono pliku: {trc_path}")
+            if hasattr(self, "_presets_panel"):
+                self._presets_panel.refresh(self._current_model, self._current_module)
             return
 
         content = read_text_file(trc_path)
@@ -2148,6 +2822,8 @@ class CodingPanel(QWidget):
             self.context_label.setText(
                 f"Załadowano TRC ({len(self._option_rows)} opcji). Wybierz model i moduł lub użyj '🔍 Wykryj moduł'."
             )
+        if hasattr(self, "_presets_panel"):
+            self._presets_panel.refresh(self._current_model, self._current_module)
 
     def _apply_module_filter_to_table(self):
         self._row_editable = {}
