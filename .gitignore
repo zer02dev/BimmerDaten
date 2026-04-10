@@ -68,3 +68,5 @@ data/database.db
 *.000
 *.MAN
 test.py
+
+docs
