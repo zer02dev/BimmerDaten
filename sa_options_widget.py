@@ -104,6 +104,12 @@ class SAOptionsWidget(QWidget):
         self.load_btn.clicked.connect(self._load_fa_trc)
         top.addWidget(self.load_btn)
 
+        self.only_vehicle_btn = QPushButton("Show only FA codes")
+        self.only_vehicle_btn.setCheckable(True)
+        self.only_vehicle_btn.setEnabled(False)
+        self.only_vehicle_btn.toggled.connect(self._populate_table)
+        top.addWidget(self.only_vehicle_btn)
+
         top.addWidget(QLabel("Category:"))
         self.category_combo = QComboBox()
         self.category_combo.addItems(self.CATEGORIES)
@@ -163,6 +169,11 @@ class SAOptionsWidget(QWidget):
 
         self._vehicle_sa_codes = parse_fa_trc(path)
 
+        has_vehicle_codes = bool(self._vehicle_sa_codes)
+        self.only_vehicle_btn.setEnabled(has_vehicle_codes)
+        if not has_vehicle_codes:
+            self.only_vehicle_btn.setChecked(False)
+
         work_dir = str(Path(path).parent)
         sysdaten = parse_sysdaten(work_dir)
         vin = str(sysdaten.get("FAHRGESTELL_NR", "") or "").strip() or "—"
@@ -184,6 +195,13 @@ class SAOptionsWidget(QWidget):
             parser_category = self.CATEGORY_FILTER_MAP.get(category, category)
             all_options = [o for o in all_options if o.get("category") == parser_category]
 
+        vehicle_codes = set(code.upper() for code in (self._vehicle_sa_codes or []))
+        if self.only_vehicle_btn.isChecked() and vehicle_codes:
+            all_options = [
+                o for o in all_options
+                if str(o.get("sa_code") or "").strip().upper() in vehicle_codes
+            ]
+
         query = (self.search_edit.text() or "").strip().lower()
         if query:
             filtered = []
@@ -199,8 +217,6 @@ class SAOptionsWidget(QWidget):
 
         self._current_options = list(all_options)
         self.table.setRowCount(len(all_options))
-
-        vehicle_codes = set(code.upper() for code in (self._vehicle_sa_codes or []))
 
         for row, opt in enumerate(all_options):
             sa_code = str(opt.get("sa_code") or "").strip().upper()
