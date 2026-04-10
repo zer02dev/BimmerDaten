@@ -57,6 +57,17 @@ class SAOptionsWidget(QWidget):
         "Other",
     ]
 
+    CATEGORY_FILTER_MAP = {
+        "Engine": "Silnik",
+        "Transmission": "Skrzynia",
+        "Safety": "Bezpieczeństwo",
+        "Comfort": "Komfort",
+        "Multimedia": "Multimedia",
+        "Lighting": "Oświetlenie",
+        "Body": "Nadwozie",
+        "Other": "Inne",
+    }
+
     def __init__(self, db: Database | None, config: dict | None = None, parent=None):
         super().__init__(parent)
         self.db = db
@@ -170,7 +181,8 @@ class SAOptionsWidget(QWidget):
 
         category = self.category_combo.currentText()
         if category and category != "All":
-            all_options = [o for o in all_options if o.get("category") == category]
+            parser_category = self.CATEGORY_FILTER_MAP.get(category, category)
+            all_options = [o for o in all_options if o.get("category") == parser_category]
 
         query = (self.search_edit.text() or "").strip().lower()
         if query:
