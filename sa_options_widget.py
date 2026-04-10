@@ -83,6 +83,7 @@ class SAOptionsWidget(QWidget):
         self._setup_ui()
         self._load_models()
         self._populate_table()
+        self._auto_load_fa_trc()
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -100,11 +101,17 @@ class SAOptionsWidget(QWidget):
         self.vin_label = QLabel("VIN: —")
         top.addWidget(self.vin_label, 1)
 
-        self.load_btn = QPushButton("📂 Load fa.trc")
+        self.fa_trc_status_label = QLabel("No fa.trc file")
+        self.fa_trc_status_label.setStyleSheet("color: #888;")
+        top.addWidget(self.fa_trc_status_label)
+
+        self.load_btn = QPushButton("📂")
+        self.load_btn.setMaximumWidth(40)
+        self.load_btn.setToolTip("Manually select fa.trc file")
         self.load_btn.clicked.connect(self._load_fa_trc)
         top.addWidget(self.load_btn)
 
-        self.only_vehicle_btn = QPushButton("Show only FA codes")
+        self.only_vehicle_btn = QPushButton("Show only your car codes")
         self.only_vehicle_btn.setCheckable(True)
         self.only_vehicle_btn.setEnabled(False)
         self.only_vehicle_btn.toggled.connect(self._populate_table)
@@ -156,17 +163,33 @@ class SAOptionsWidget(QWidget):
 
         self.model_combo.blockSignals(False)
 
-    def _load_fa_trc(self):
-        start_dir = self.work_folder if Path(self.work_folder).exists() else str(Path.home())
-        path = QFileDialog.getOpenFileName(
+    def _auto_load_fa_trc(self):
+        """Try to automatically load fa.trc from default work folder."""
+        default_path = Path(self.work_folder) / "fa.trc"
+        if default_path.exists():
+            try:
+                self._load_fa_trc_from_path(str(default_path))
+                return
+            except Exception as e:
+                # Silently fail if auto-load fails, user can manually select
+                pass
+        
+        # File not found: set status label and ask user if they want to manually select
+        self.fa_trc_status_label.setText("No fa.trc file")
+        self.fa_trc_status_label.setStyleSheet("color: #888;")
+        reply = QMessageBox.question(
             self,
             "Load fa.trc",
-            start_dir,
-            "Trace files (*.trc *.TRC);;All files (*)",
-        )[0]
-        if not path:
-            return
+            f"No fa.trc found in default location:\n{default_path}\n\n"
+            "Would you like to manually select the fa.trc file?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._load_fa_trc()
 
+    def _load_fa_trc_from_path(self, path: str):
+        """Load fa.trc from specified path."""
         self._vehicle_sa_codes = parse_fa_trc(path)
 
         has_vehicle_codes = bool(self._vehicle_sa_codes)
@@ -179,7 +202,27 @@ class SAOptionsWidget(QWidget):
         vin = str(sysdaten.get("FAHRGESTELL_NR", "") or "").strip() or "—"
         self.vin_label.setText(f"VIN: {vin}")
 
+        self.fa_trc_status_label.setText("✅ File fa.trc loaded")
+        self.fa_trc_status_label.setStyleSheet("color: #2a8f2a;")
+
         self._populate_table()
+
+    def _load_fa_trc(self):
+        """Open file dialog to manually select fa.trc."""
+        start_dir = self.work_folder if Path(self.work_folder).exists() else str(Path.home())
+        path = QFileDialog.getOpenFileName(
+            self,
+            "Load fa.trc",
+            start_dir,
+            "Trace files (*.trc *.TRC);;All files (*)",
+        )[0]
+        if not path:
+            return
+
+        try:
+            self._load_fa_trc_from_path(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load fa.trc: {e}")
 
     def _populate_table(self):
         chassis = (self.model_combo.currentText() or "").strip().upper()
