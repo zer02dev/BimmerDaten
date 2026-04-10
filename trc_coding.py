@@ -199,7 +199,7 @@ def _collect_pfl_profiles(base_path: Path) -> list[dict]:
         can_write = bool(info.get("can_write"))
         if can_write:
             status = "full"
-            status_label = "pełny dostęp (odczyt + zapis)"
+            status_label = "full access (read + write)"
             color = "#228B22"
         elif can_read:
             status = "read"
@@ -565,7 +565,7 @@ class ExportConfirmDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        module_text = self._module_file or "BRAK_MODULU"
+        module_text = self._module_file or "NO_MODULE"
         label = QLabel(f"Change summary - {module_text} (Summary of changes)")
         layout.addWidget(label)
 
@@ -814,7 +814,7 @@ class HistoryCompareDialog(QDialog):
             from reportlab.pdfbase.ttfonts import TTFont
             from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
         except Exception as exc:
-            raise RuntimeError(f"Brak biblioteki reportlab: {exc}")
+            raise RuntimeError(f"Missing reportlab library: {exc}")
 
         def _find_font_path(candidates: list[Path]) -> Path | None:
             for candidate in candidates:
@@ -952,11 +952,11 @@ class HistoryCompareDialog(QDialog):
         metadata_rows = [
             ["VIN:", str(row.get("vin") or "")],
             ["Model:", str(row.get("model") or "")],
-            ["Moduł:", module_display],
-            ["Nr części:", str(row.get("teilenummer") or "")],
+            ["Module:", module_display],
+            ["Part number:", str(row.get("teilenummer") or "")],
             ["Data prod.:", str(row.get("production_date_display") or row.get("production_date") or "")],
-            ["Data eksportu:", str(row.get("exported_at") or "")],
-            ["Notatka:", str(row.get("notes") or "")],
+            ["Export date:", str(row.get("exported_at") or "")],
+            ["Note:", str(row.get("notes") or "")],
         ]
 
         story = []
@@ -1015,12 +1015,12 @@ class HistoryCompareDialog(QDialog):
 
             header_row = [
                 make_cell("Nr", header_cell_style),
-                make_cell("Funkcja (DE)", header_cell_style),
-                make_cell("Funkcja (EN)", header_cell_style),
-                make_cell("Było (DE)", header_cell_style),
-                make_cell("Było (EN)", header_cell_style),
-                make_cell("Jest (DE)", header_cell_style),
-                make_cell("Jest (EN)", header_cell_style),
+                make_cell("Function (DE)", header_cell_style),
+                make_cell("Function (EN)", header_cell_style),
+                make_cell("Before (DE)", header_cell_style),
+                make_cell("Before (EN)", header_cell_style),
+                make_cell("After (DE)", header_cell_style),
+                make_cell("After (EN)", header_cell_style),
             ]
             table_rows = [header_row]
             for index, change in enumerate(changes, start=1):
@@ -1118,7 +1118,7 @@ class HistoryCompareDialog(QDialog):
         QMessageBox.information(
             self,
             "Export",
-            f"Zapisano do:\n{export_dir}\n\nFSW_PSWbefore.TRC\nFSW_PSWafter.TRC\nFSW_PSW_report.pdf",
+            f"Saved to:\n{export_dir}\n\nFSW_PSWbefore.TRC\nFSW_PSWafter.TRC\nFSW_PSW_report.pdf",
         )
 
     def _populate_vin_values(self):
@@ -1139,7 +1139,7 @@ class HistoryCompareDialog(QDialog):
         for vin in vins:
             model, production_date = vin_details.get(vin, ("", ""))
             date_text = production_date if production_date else "No date"
-            model_text = model if model else "brak modelu"
+            model_text = model if model else "no model"
             self.vin_filter_combo.addItem(f"{vin} | {model_text} | {date_text}", vin)
 
         if self._current_vin:
@@ -1301,11 +1301,11 @@ class HistoryExportDialog(QDialog):
         self.rows_table.setHorizontalHeaderLabels([
             "VIN",
             "Model",
-            "Moduł",
-            "Nr części",
+            "Module",
+            "Part number",
             "Data prod.",
-            "Zmiany",
-            "Data eksportu",
+            "Changes",
+            "Export date",
         ])
         self.rows_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.rows_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -1394,23 +1394,23 @@ class HistoryExportDialog(QDialog):
         lines = [
             f"VIN: {row.get('vin', '')}",
             f"Model: {row.get('model', '')}",
-            f"Moduł: {row.get('module', '')}",
-            f"Nr części: {row.get('teilenummer', '')}",
+            f"Module: {row.get('module', '')}",
+            f"Part number: {row.get('teilenummer', '')}",
             f"Data prod.: {row.get('production_date_display', '')}",
-            f"Data eksportu: {row.get('exported_at', '')}",
-            f"Notatka: {notes or 'brak'}",
-            f"Liczba zmian: {len(change_lines)}",
+            f"Export date: {row.get('exported_at', '')}",
+            f"Note: {notes or 'none'}",
+            f"Number of changes: {len(change_lines)}",
             "",
-            "Zmiany z changed_options:",
+            "Changes from changed_options:",
         ]
 
         lines.extend(change_lines or ["No saved changes."])
         if before_content or after_content:
             lines.extend([
                 "",
-                "Dane TRC zapisane w DB:",
-                f"content_before: {len(before_content)} znaków",
-                f"content_after: {len(after_content)} znaków",
+                "TRC data saved in DB:",
+                f"content_before: {len(before_content)} characters",
+                f"content_after: {len(after_content)} characters",
             ])
 
         self.preview.setPlainText("\n".join(lines))
@@ -1418,7 +1418,7 @@ class HistoryExportDialog(QDialog):
     def _accept_selection(self):
         row = self._current_full_row()
         if not row:
-            QMessageBox.information(self, "Eksport", "Wybierz wpis z listy.")
+            QMessageBox.information(self, "Export", "Choose an entry from the list.")
             play_sound("info")
             return
         self._selected_row = row
@@ -1561,7 +1561,7 @@ class PresetEditorDialog(QDialog):
         if self._view_only:
             self.view_table = QTableWidget()
             self.view_table.setColumnCount(2)
-            self.view_table.setHorizontalHeaderLabels(["Opcja", "Wartość"])
+            self.view_table.setHorizontalHeaderLabels(["Option", "Value"])
             self.view_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
             self.view_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
             self.view_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -1737,7 +1737,7 @@ class PresetEditorDialog(QDialog):
             value_translation_item = QTableWidgetItem(self._coding_panel._translator.translate(segment.value))
             value_translation_item.setFlags(value_translation_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
-            changed_item = QTableWidgetItem("Nie")
+            changed_item = QTableWidgetItem("No")
             changed_item.setFlags(changed_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
             self.table.setItem(row_index, 0, favorite_item)
@@ -1895,7 +1895,7 @@ class PresetEditorDialog(QDialog):
 
         status_item = self.table.item(row_index, 6)
         if status_item:
-            status_item.setText("Tak" if changed and editable else "Nie")
+            status_item.setText("Yes" if changed and editable else "No")
 
         self.table.resizeRowToContents(row_index)
 
@@ -2150,7 +2150,7 @@ class PresetsPanel(QGroupBox):
 
         table = QTableWidget()
         table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["Opcja", "Aktualna wartość", "Wartość z presetu"])
+        table.setHorizontalHeaderLabels(["Option", "Current value", "Preset value"])
         table.setRowCount(len(conflicts))
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -2256,7 +2256,7 @@ class PresetsPanel(QGroupBox):
         answer = QMessageBox.question(
             self,
             "Preset",
-            f"Czy na pewno chcesz usunąć preset '{preset_name}'?",
+            f"Are you sure you want to delete preset '{preset_name}'?",
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
@@ -2362,7 +2362,7 @@ class CodingPanel(QWidget):
 
         left_layout.addStretch(1)
 
-        self.refresh_button = QPushButton("🔄 Odśwież")
+        self.refresh_button = QPushButton("🔄 Refresh")
         self.refresh_button.clicked.connect(self.reload_current_trc)
         left_layout.addWidget(self.refresh_button)
 
@@ -2417,13 +2417,13 @@ class CodingPanel(QWidget):
         self.search_edit.textChanged.connect(self._on_filter_text_changed)
         filter_row.addWidget(self.search_edit, 1)
 
-        self.favorites_only_checkbox = QCheckBox("Tylko ulubione")
+        self.favorites_only_checkbox = QCheckBox("Favorites only")
         self.favorites_only_checkbox.toggled.connect(self._on_favorites_only_toggled)
         filter_row.addWidget(self.favorites_only_checkbox)
 
         self.clear_search_button = QPushButton("✕")
         self.clear_search_button.setFixedWidth(24)
-        self.clear_search_button.setToolTip("Wyczyść filtr")
+        self.clear_search_button.setToolTip("Clear filter")
         self.clear_search_button.clicked.connect(self.search_edit.clear)
         self.clear_search_button.setEnabled(False)
         filter_row.addWidget(self.clear_search_button)
@@ -2439,11 +2439,11 @@ class CodingPanel(QWidget):
         self.trc_table.setHorizontalHeaderLabels([
             "★",
             "Nr",
-            "Opcja",
-            "Tłumaczenie",
-            "Wartość",
-            "Tłumaczenie wartości",
-            "Zmieniono",
+            "Option",
+            "Translation",
+            "Value",
+            "Value translation",
+            "Changed",
         ])
         self.trc_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.trc_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -2464,7 +2464,7 @@ class CodingPanel(QWidget):
 
         self.export_man_button = QPushButton("📤 Export .MAN")
         self.export_trc_button = QPushButton("📤 Export .TRC")
-        self.change_count_label = QLabel("Zmieniono: 0 opcji")
+        self.change_count_label = QLabel("Changed: 0 options")
 
         self.export_man_button.clicked.connect(lambda: self.export_current_file(".MAN"))
         self.export_trc_button.clicked.connect(lambda: self.export_current_file(".TRC"))
@@ -2513,7 +2513,7 @@ class CodingPanel(QWidget):
 
         chip_widgets = []
         for profile in profiles:
-            profile_name = str(profile.get("profile_name") or "").strip() or "BRAK"
+            profile_name = str(profile.get("profile_name") or "").strip() or "NONE"
             can_write = bool(profile.get("can_write"))
             can_read = bool(profile.get("can_read"))
             color = "#1F8A1F" if can_write else "#C00000"
@@ -2534,7 +2534,7 @@ class CodingPanel(QWidget):
             )
             chip.setFlat(False)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.setToolTip(f"{profile.get('profile_path', '')}\nKliknij, aby wyświetlić szczegóły")
+            chip.setToolTip(f"{profile.get('profile_path', '')}\nClick to show details")
             chip.setFixedHeight(chip.sizeHint().height())
             chip.clicked.connect(lambda checked, p=profile: self._show_profile_info(p))
             chip_widgets.append(chip)
@@ -2555,7 +2555,7 @@ class CodingPanel(QWidget):
         self.profile_status_frame.setFixedHeight(tallest_chip + 10)
 
     def _show_profile_info(self, profile: dict):
-        profile_name = str(profile.get("profile_name") or "").strip() or "BRAK"
+        profile_name = str(profile.get("profile_name") or "").strip() or "NONE"
         profile_path = str(profile.get("profile_path") or "")
         can_read = bool(profile.get("can_read"))
         can_write = bool(profile.get("can_write"))
@@ -2978,7 +2978,7 @@ class CodingPanel(QWidget):
 
         if self._module_loaded:
             self.context_label.setText(
-                f"Załadowano: {self._current_module_file} — {matched}/{total} opcji dopasowanych ({percentage}%)"
+                f"Loaded: {self._current_module_file} - {matched}/{total} options matched ({percentage}%)"
             )
         else:
             self.context_label.setText(
@@ -3018,7 +3018,7 @@ class CodingPanel(QWidget):
             favorite_item.setFlags(favorite_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             favorite_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             favorite_item.setForeground(QColor("#CC8800") if is_favorite else QColor("#888888"))
-            favorite_item.setToolTip("Kliknij, aby przypiąć/odpiąć opcję")
+            favorite_item.setToolTip("Click to pin/unpin option")
 
             number_item = QTableWidgetItem(str(option_index + 1))
             number_item.setFlags(number_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -3360,7 +3360,7 @@ class CodingPanel(QWidget):
 
         status_item = self.trc_table.item(row_index, 6)
         if status_item:
-            status_item.setText("Tak" if changed and editable else "Nie")
+            status_item.setText("Yes" if changed and editable else "No")
 
         favorite_item = self.trc_table.item(row_index, 0)
         if favorite_item:
@@ -3381,7 +3381,7 @@ class CodingPanel(QWidget):
             segment = self._segments[entry["segment_index"]]
             if segment.value != segment.original_value:
                 changed_count += 1
-        self.change_count_label.setText(f"Zmieniono: {changed_count} opcji")
+        self.change_count_label.setText(f"Changed: {changed_count} options")
 
     def _sync_values_from_widgets(self):
         for row_index, entry in enumerate(self._table_entries):

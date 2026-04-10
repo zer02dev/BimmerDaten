@@ -448,7 +448,7 @@ class JobListPanel(QWidget):
     def load_jobs(self, jobs: list[Job]):
         self._all_jobs = jobs
         self._apply_filter()
-        self.job_count_label.setText(f"Jobów: {len(jobs)}")
+        self.job_count_label.setText(f"Jobs: {len(jobs)}")
 
     def _apply_filter(self):
         search = self.search_edit.text().strip().upper()
@@ -488,7 +488,7 @@ class JobListPanel(QWidget):
         count = self.job_list.count()
         if self._all_jobs:
             self.job_count_label.setText(
-                f"Pokazano: {count} / {len(self._all_jobs)}"
+                f"Shown: {count} / {len(self._all_jobs)}"
             )
 
 
@@ -516,7 +516,7 @@ class JobDetailPanel(QWidget):
         layout.setSpacing(4)
 
         # Tytuł
-        self.title_label = QLabel("SZCZEGÓŁY JOBA")
+        self.title_label = QLabel("JOB DETAILS")
         self.title_label.setObjectName("title_label")
         layout.addWidget(self.title_label)
 
@@ -836,7 +836,7 @@ class JobDetailPanel(QWidget):
             self._set_translation_text(
                 translated_text,
                 is_live_translated=True,
-                tooltip="Tłumaczenie automatyczne — zapisano do bazy danych",
+                tooltip="Automatic translation - saved to the database",
             )
 
     def _get_translation(self, prg_file: str, job_name: str, text_de: str, lang: str) -> tuple[str, bool]:
@@ -1253,7 +1253,7 @@ class JobDetailPanel(QWidget):
         self._current_job = None
         self._current_tables = []
         self._current_prg_file = ""
-        self._current_comments_de = "Brak komentarzy."
+        self._current_comments_de = "No comments."
         self.title_label.setText("JOB DETAILS")
         self.job_name_label.setText("—")
         self.job_addr_label.setText("Address: —")
@@ -2203,7 +2203,7 @@ class MainWindow(QMainWindow):
         start_dir = self._inpa_path or r"C:\EC-APPS\INPA"
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Wybierz folder INPA",
+            "Choose INPA folder",
             start_dir,
         )
         if not folder:
@@ -2267,7 +2267,7 @@ class MainWindow(QMainWindow):
         self.job_detail_panel.clear()
         self._update_vehicle_info_bar()
         self.jobs_info.setText(
-            f"Jobów: {len(self._prg.jobs)} | Tabel: {len(self._prg.tables)}"
+            f"Jobs: {len(self._prg.jobs)} | Tables: {len(self._prg.tables)}"
         )
 
     def _update_vehicle_info_bar(self):

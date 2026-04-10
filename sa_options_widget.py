@@ -143,7 +143,7 @@ class SAOptionsWidget(QWidget):
         start_dir = self.work_folder if Path(self.work_folder).exists() else str(Path.home())
         path = QFileDialog.getOpenFileName(
             self,
-            "Załaduj fa.trc",
+            "Load fa.trc",
             start_dir,
             "Trace files (*.trc *.TRC);;All files (*)",
         )[0]
