@@ -1504,20 +1504,41 @@ class PresetEditorDialog(QDialog):
         self._option_rows = [index for index, segment in enumerate(self._segments) if segment.kind == "option"]
         self._row_editable: dict[int, bool] = {row_index: True for row_index in range(len(self._option_rows))}
         self._filter_text = ""
+        self._view_only = not bool(self._segments)
+        self._favorite_options: set[str] = set()
 
-        if self._preset:
+        if coding_panel._db and coding_panel._current_model and coding_panel._current_module:
+            self._favorite_options = coding_panel._db.get_trc_favorites(
+                coding_panel._current_model,
+                coding_panel._current_module,
+            )
+        else:
+            self._favorite_options = set()
+
+        if self._view_only and self._preset:
+            preset_name = str(self._preset.get("name") or "")
+            self.setWindowTitle(f"Podgląd presetu: {preset_name}")
+        elif self._preset:
             self.setWindowTitle("Edytuj preset")
             self._apply_preset_to_copy(self._preset)
         else:
             self.setWindowTitle("Dodaj preset")
 
         self._build_ui()
-        self._render_table()
+        if self._view_only:
+            self._render_view_only_table()
+        else:
+            self._render_table()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
+
+        if self._view_only:
+            info_label = QLabel("Brak załadowanego pliku TRC — widok tylko do odczytu")
+            info_label.setWordWrap(True)
+            layout.addWidget(info_label)
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -1529,12 +1550,35 @@ class PresetEditorDialog(QDialog):
         current_module = str((self._preset or {}).get("module") or getattr(self._coding_panel, "_current_module", "") or "")
         self.model_edit = QLineEdit(current_model)
         self.module_edit = QLineEdit(current_module)
+        self.model_edit.setReadOnly(True)
+        self.module_edit.setReadOnly(True)
+        readonly_style = "background-color: #E0E0E0; color: #606060; border: 1px solid #808080;"
+        self.model_edit.setStyleSheet(readonly_style)
+        self.module_edit.setStyleSheet(readonly_style)
 
         form.addRow("Nazwa:", self.name_edit)
         form.addRow("Opis:", self.description_edit)
         form.addRow("Model:", self.model_edit)
         form.addRow("Moduł:", self.module_edit)
         layout.addLayout(form)
+
+        if self._view_only:
+            self.view_table = QTableWidget()
+            self.view_table.setColumnCount(2)
+            self.view_table.setHorizontalHeaderLabels(["Opcja", "Wartość"])
+            self.view_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            self.view_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            self.view_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+            self.view_table.horizontalHeader().setStretchLastSection(True)
+            layout.addWidget(self.view_table, 1)
+
+            button_row = QHBoxLayout()
+            button_row.addStretch()
+            close_button = QPushButton("Zamknij")
+            close_button.clicked.connect(self.reject)
+            button_row.addWidget(close_button)
+            layout.addLayout(button_row)
+            return
 
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
@@ -1570,13 +1614,30 @@ class PresetEditorDialog(QDialog):
 
         button_row = QHBoxLayout()
         button_row.addStretch()
-        save_button = QPushButton("Zapisz")
-        cancel_button = QPushButton("Anuluj")
-        save_button.clicked.connect(self._on_save)
-        cancel_button.clicked.connect(self.reject)
-        button_row.addWidget(save_button)
-        button_row.addWidget(cancel_button)
+        self.save_button = QPushButton("Zapisz")
+        self.cancel_button = QPushButton("Anuluj")
+        self.save_button.clicked.connect(self._on_save)
+        self.cancel_button.clicked.connect(self.reject)
+        button_row.addWidget(self.save_button)
+        button_row.addWidget(self.cancel_button)
         layout.addLayout(button_row)
+
+    def _render_view_only_table(self):
+        changes = list((self._preset or {}).get("changes") or [])
+        self.view_table.setRowCount(len(changes))
+        for row_index, change in enumerate(changes):
+            option_name = str(change.get("option") or "")
+            value_name = str(change.get("value") or "")
+
+            option_item = QTableWidgetItem(option_name)
+            option_item.setFlags(option_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            value_item = QTableWidgetItem(value_name)
+            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            self.view_table.setItem(row_index, 0, option_item)
+            self.view_table.setItem(row_index, 1, value_item)
+
+        self.view_table.resizeColumnsToContents()
 
     def _apply_preset_to_copy(self, preset: dict):
         option_map: dict[str, TrcSegment] = {}
@@ -1638,11 +1699,13 @@ class PresetEditorDialog(QDialog):
 
             segment = self._segments[segment_index]
             editable = self._row_editable.get(option_index, True)
+            option_key = segment.option.strip().upper()
+            is_favorite = option_key in self._favorite_options
 
-            favorite_item = QTableWidgetItem("☆")
+            favorite_item = QTableWidgetItem("★" if is_favorite else "☆")
             favorite_item.setFlags(favorite_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             favorite_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            favorite_item.setForeground(QColor("#888888"))
+            favorite_item.setForeground(QColor("#CC8800") if is_favorite else QColor("#888888"))
 
             number_item = QTableWidgetItem(str(option_index + 1))
             number_item.setFlags(number_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -1978,9 +2041,10 @@ class PresetsPanel(QGroupBox):
 
         self._update_button_states()
 
-    def _collect_conflicts(self, preset: dict) -> tuple[list[dict], list[dict]]:
+    def _collect_preset_matches(self, preset: dict) -> tuple[list[dict], list[dict], list[dict]]:
         conflicts: list[dict] = []
-        applicable: list[dict] = []
+        matched: list[dict] = []
+        unmatched: list[dict] = []
 
         for change in (preset.get("changes") or []):
             option_name = str(change.get("option") or "").strip()
@@ -1998,10 +2062,12 @@ class PresetsPanel(QGroupBox):
                     break
 
             if matched_row < 0 or matched_row >= len(self._coding_panel._table_entries):
+                unmatched.append({"option": option_name, "value": target_value})
                 continue
 
             entry = self._coding_panel._table_entries[matched_row]
             if entry.get("kind") != "option":
+                unmatched.append({"option": option_name, "value": target_value})
                 continue
 
             segment_index = entry.get("segment_index")
@@ -2016,7 +2082,7 @@ class PresetsPanel(QGroupBox):
                         "preset": target_value,
                     }
                 )
-            applicable.append(
+            matched.append(
                 {
                     "row_index": matched_row,
                     "option": option_name,
@@ -2024,7 +2090,56 @@ class PresetsPanel(QGroupBox):
                 }
             )
 
-        return conflicts, applicable
+        return matched, conflicts, unmatched
+
+    def _show_unmatched_dialog(self, unmatched: list[dict], applied_count: int):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Niedopasowane opcje presetu")
+        dialog.setModal(True)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        if applied_count == 0:
+            top_text = "Żadna opcja z presetu nie została dopasowana do załadowanego pliku TRC."
+        else:
+            top_text = "Niektóre opcje z presetu nie zostały dopasowane do załadowanego pliku TRC:"
+        label = QLabel(top_text)
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        table = QTableWidget()
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(["Opcja", "Wartość"])
+        table.setRowCount(len(unmatched))
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setStretchLastSection(True)
+
+        for row_index, item in enumerate(unmatched):
+            option_item = QTableWidgetItem(str(item.get("option") or ""))
+            option_item.setFlags(option_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            value_item = QTableWidgetItem(str(item.get("value") or ""))
+            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row_index, 0, option_item)
+            table.setItem(row_index, 1, value_item)
+
+        layout.addWidget(table, 1)
+
+        if applied_count > 0:
+            applied_label = QLabel(f"Dopasowano i zastosowano: {applied_count} opcji.")
+            layout.addWidget(applied_label)
+
+        button_row = QHBoxLayout()
+        button_row.addStretch()
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(dialog.accept)
+        button_row.addWidget(ok_button)
+        layout.addLayout(button_row)
+
+        dialog.exec()
 
     def _ask_conflicts_action(self, conflicts: list[dict]) -> str:
         dialog = QDialog(self)
@@ -2093,25 +2208,34 @@ class PresetsPanel(QGroupBox):
         if not preset:
             return
 
-        conflicts, applicable = self._collect_conflicts(preset)
-        if not applicable:
-            QMessageBox.information(self, "Preset", "Brak pasujących opcji do załadowania.")
+        matched, conflicts, unmatched = self._collect_preset_matches(preset)
+        if not matched:
+            if unmatched:
+                self._show_unmatched_dialog(unmatched, applied_count=0)
+            else:
+                QMessageBox.information(self, "Preset", "Brak pasujących opcji do załadowania.")
             return
+
+        applied_changes: list[dict] = []
 
         if conflicts:
             action = self._ask_conflicts_action(conflicts)
             if action == "cancel":
                 return
             if action == "all":
-                self._apply_changes(applicable)
-                return
+                self._apply_changes(matched)
+                applied_changes = list(matched)
+            else:
+                conflicting_rows = {int(conflict.get("row_index", -1)) for conflict in conflicts}
+                non_conflicting = [item for item in matched if int(item.get("row_index", -1)) not in conflicting_rows]
+                self._apply_changes(non_conflicting)
+                applied_changes = list(non_conflicting)
+        else:
+            self._apply_changes(matched)
+            applied_changes = list(matched)
 
-            conflicting_rows = {int(conflict.get("row_index", -1)) for conflict in conflicts}
-            non_conflicting = [item for item in applicable if int(item.get("row_index", -1)) not in conflicting_rows]
-            self._apply_changes(non_conflicting)
-            return
-
-        self._apply_changes(applicable)
+        if unmatched:
+            self._show_unmatched_dialog(unmatched, applied_count=len(applied_changes))
 
     def _on_view_edit(self):
         preset = self._selected_preset()
