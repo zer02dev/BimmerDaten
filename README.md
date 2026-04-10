@@ -124,13 +124,13 @@ Requires Python 3.10+.
 
 ## Screenshots
 
-![jobs main screen](assets/screenshots/BimmerDaten_jobs_main.png)
-![jobs params screen](assets/screenshots/BimmerDaten_jobs_params.png)
-![jobs selector model](assets/screenshots/BimmerDaten_jobs_selector.png)
-![jobs tables screen](assets/screenshots/BimmerDaten_jobs_tables.png)
-![NCS coding screen main](assets/screenshots/BimmerDaten_NCS_coding_main.png)
-![sa/fa codes all](assets/screenshots/BimmerDaten_SA_codes_all.png)
-![sa/fa codes only car](assets/screenshots/BimmerDaten_SA_codes_your_car.png)
+<img src="assets/screenshots/BimmerDaten_jobs_main.png" width="600"/>
+<img src="assets/screenshots/BimmerDaten_jobs_params.png" width="600"/>
+<img src="assets/screenshots/BimmerDaten_jobs_selector.png" width="600"/>
+<img src="assets/screenshots/BimmerDaten_jobs_tables.png" width="600"/>
+<img src="assets/screenshots/BimmerDaten_NCS_coding_main.png" width="600"/>
+<img src="assets/screenshots/BimmerDaten_SA_codes_all.png" width="600"/>
+<img src="assets/screenshots/BimmerDaten_SA_codes_your_car.png" width="600"/>
 ---
 
 ## Supported File Types
