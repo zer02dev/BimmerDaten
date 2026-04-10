@@ -2311,104 +2311,92 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Język tłumaczeń: {self._lang.upper()}")
 
     def _show_about(self):
-        """Show About dialog with application information."""
         dialog = QDialog(self)
         dialog.setWindowTitle("O programie")
-        dialog.setFixedSize(500, 550)
+        dialog.setFixedSize(520, 560)
+        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         dialog.setStyleSheet(WIN98_STYLE)
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(12)
-        layout.setContentsMargins(16, 16, 16, 16)
-        
-        # App name (bold, large)
-        app_name_label = QLabel("BimmerDaten")
-        app_name_font = QFont("Tahoma", 16, QFont.Weight.Bold)
-        app_name_label.setFont(app_name_font)
-        layout.addWidget(app_name_label)
-        
-        # Version and author
-        version_author = QLabel("<b>Wersja:</b> v0.2<br><b>Autor:</b> Filip Dzitko")
-        layout.addWidget(version_author)
-        
-        # Description
-        description_text = (
-            "<b>Opis:</b><br>"
-            "Narzędzie do pracy z BMW EDIABAS i NCS Expert. "
-            "Pozwala przeglądać pliki .PRG, tabelki i joby, analizować oraz edytować kodowanie TRC, "
-            "eksportować zmiany do .MAN i .TRC, przeglądać historię zapisów z bazy danych, "
-            "generować raporty PDF oraz korzystać z tłumaczeń jobów i opcji w locie."
-        )
-        description_label = QLabel(description_text)
-        description_label.setWordWrap(True)
-        layout.addWidget(description_label)
 
-        features_text = (
-            "<b>Najważniejsze funkcje:</b><br>"
-            "<ul style='margin-top: 6px; margin-bottom: 0;'>"
-            "<li>kodowanie TRC z podglądem zmian i historią</li>"
-            "<li>eksport .MAN / .TRC z kontrolą profilu NCS Expert</li>"
-            "<li>dwujęzyczne tłumaczenia DE / EN / PL z zapisem do SQLite</li>"
-            "<li>podgląd jobów, tabel i danych INPA / EDIABAS</li>"
-            "<li>raporty PDF z metadanymi i listą zmian</li>"
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 12)
+
+        # Title bar (navy, matching JOB title bar style)
+        header = QLabel("  BimmerDaten")
+        header.setObjectName("title_label")
+        header.setFont(QFont("Tahoma", 13, QFont.Weight.Bold))
+        header.setFixedHeight(36)
+        layout.addWidget(header)
+
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(16, 14, 16, 0)
+        content_layout.setSpacing(10)
+
+        # Version / author row
+        meta = QLabel(
+            "<b>Wersja:</b> v1.0 &nbsp;&nbsp; "
+            "<b>Autor:</b> Filip Dzitko (zer02dev) &nbsp;&nbsp; "
+            "<b>Licencja:</b> GPL-3.0"
+        )
+        meta.setWordWrap(True)
+        content_layout.addWidget(meta)
+
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.Shape.HLine)
+        sep1.setObjectName("separator")
+        content_layout.addWidget(sep1)
+
+        # Features
+        features = QTextBrowser()
+        features.setOpenExternalLinks(True)
+        features.setHtml(
+            "<b>Funkcje:</b>"
+            "<ul style='margin-top:4px; margin-bottom:0; padding-left:18px;'>"
+            "<li>Przeglądarka jobów EDIABAS — argumenty, wyniki, disassembly, tabele</li>"
+            "<li>Live data (BETRIEBSWTAB) z dekodowaniem telegramów DS2</li>"
+            "<li>Edytor kodowania TRC z śledzeniem zmian i historią</li>"
+            "<li>Presety kodowania — zapisz i wczytaj ulubione konfiguracje</li>"
+            "<li>Eksport zmian do .MAN / .TRC</li>"
+            "<li>Tłumaczenia DE → EN / PL (offline DB + online fallback)</li>"
+            "<li>Dekoder FA/SA z plików AT.000 i fa.trc</li>"
+            "<li>Parser modeli INPA z wykrywaniem plików PRG</li>"
+            "<li>Raporty PDF z historią i porównaniem kodowania</li>"
             "</ul>"
         )
-        features_label = QTextBrowser()
-        features_label.setHtml(features_text)
-        features_label.setMaximumHeight(160)
-        features_label.setStyleSheet(
-            "QTextBrowser { border: 1px inset #808080; "
-            "background-color: #ffffff; padding: 6px; }"
+        features.setMaximumHeight(185)
+        content_layout.addWidget(features)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setObjectName("separator")
+        content_layout.addWidget(sep2)
+
+        # Credits
+        credits = QTextBrowser()
+        credits.setOpenExternalLinks(True)
+        credits.setHtml(
+            "<b>Zależności:</b> PyQt6, deep-translator, reportlab<br><br>"
+            "<b>Tłumaczenia parametrów NCS:</b> Translations.csv &copy; REVTOR "
+            "(NCS Dummy) — nie jest dołączone do programu, "
+            "wczytywane z lokalnej instalacji użytkownika.<br><br>"
+            "<b>Zgłoszenia błędów:</b> "
+            "<a href='https://github.com/zer02dev/BimmerDaten/issues'>"
+            "github.com/zer02dev/BimmerDaten</a>"
         )
-        layout.addWidget(features_label)
-        
-        # License
-        license_text = (
-            "<b>Licencja:</b> "
-            '<a href="https://www.gnu.org/licenses/gpl-3.0.html" '
-            'style="color: #0000ff; text-decoration: underline;">GPL-3.0</a>'
-        )
-        license_label = QTextBrowser()
-        license_label.setHtml(license_text)
-        license_label.setMaximumHeight(30)
-        license_label.setOpenExternalLinks(True)
-        license_label.setStyleSheet(
-            "QTextBrowser { border: none; background-color: #d4d0c8; "
-            "margin: 0; padding: 0; }"
-        )
-        layout.addWidget(license_label)
-        
-        # Credits section
-        credits_text = (
-            "<b>Zależności i źródła:</b><br>"
-            "<ul style='margin-top: 6px; margin-bottom: 0;'>"
-            "<li>deep-translator</li>"
-            "<li>PyQt6</li>"
-            "</ul>"
-        )
-        credits_label = QTextBrowser()
-        credits_label.setHtml(credits_text)
-        credits_label.setMaximumHeight(120)
-        credits_label.setStyleSheet(
-            "QTextBrowser { border: 1px inset #808080; "
-            "background-color: #ffffff; padding: 6px; }"
-        )
-        layout.addWidget(credits_label)
-        
-        # Add stretch to push button to bottom
-        layout.addStretch()
-        
-        # OK button
-        ok_button = QPushButton("OK")
-        ok_button.setMaximumWidth(80)
-        ok_button.clicked.connect(dialog.accept)
-        ok_layout = QHBoxLayout()
-        ok_layout.addStretch()
-        ok_layout.addWidget(ok_button)
-        ok_layout.addStretch()
-        layout.addLayout(ok_layout)
-        
-        dialog.setLayout(layout)
+        credits.setMaximumHeight(115)
+        content_layout.addWidget(credits)
+
+        layout.addLayout(content_layout)
+
+        ok_btn = QPushButton("OK")
+        ok_btn.setFixedWidth(80)
+        ok_btn.clicked.connect(dialog.accept)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.setContentsMargins(0, 8, 16, 0)
+        layout.addLayout(btn_row)
+
         dialog.exec()
 
     def closeEvent(self, event):

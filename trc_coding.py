@@ -2934,7 +2934,24 @@ class CodingPanel(QWidget):
         self._trc_loaded = True
         self.model_combo.setEnabled(True)
         self.module_combo.setEnabled(True)
-        if self.model_combo.currentIndex() < 0 and self.model_combo.count() > 0:
+
+        # Auto-detect model from ASW.TRC (first line = model name)
+        asw_path = Path(r"C:\NCSEXPER\WORK\ASW.TRC")
+        first_line = ""
+        if asw_path.exists():
+            try:
+                first_line = asw_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()[0].strip().upper()
+            except Exception:
+                first_line = ""
+        if first_line:
+            model_index = self.model_combo.findText(first_line, Qt.MatchFlag.MatchFixedString | Qt.MatchFlag.MatchCaseSensitive)
+            if model_index < 0:
+                model_index = self.model_combo.findText(first_line, Qt.MatchFlag.MatchContains)
+            if model_index >= 0:
+                self.model_combo.setCurrentIndex(model_index)
+            elif self.model_combo.currentIndex() < 0 and self.model_combo.count() > 0:
+                self.model_combo.setCurrentIndex(0)
+        elif self.model_combo.currentIndex() < 0 and self.model_combo.count() > 0:
             self.model_combo.setCurrentIndex(0)
         self.detect_module_button.setEnabled(bool(self._current_model))
 
