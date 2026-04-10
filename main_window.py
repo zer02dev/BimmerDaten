@@ -457,7 +457,7 @@ class JobListPanel(QWidget):
         self.job_list.clear()
         for job in self._all_jobs:
             cat = get_category(job.name)
-            if category != "-- Wszystkie --" and cat != category:
+            if category != "-- All --" and cat != category:
                 continue
             if search and search not in job.name.upper():
                 continue
