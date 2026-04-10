@@ -108,19 +108,19 @@ class TranslationWorker(QThread):
 
 JOB_CATEGORIES = {
     "STATUS":    "📊 Status / Live Data",
-    "STEUERN":   "⚙️ Steuern / Aktuatory",
-    "FS":        "❌ Fehlerspeicher / Błędy",
-    "LESEN":     "📖 Lesen / Odczyt",
-    "SCHREIBEN": "✏️ Schreiben / Zapis",
-    "START":     "▶️ Start / Systemcheck",
-    "ENDE":      "⏹️ Ende / Zakończenie",
+    "STEUERN":   "⚙️ Control / Actuators",
+    "FS":        "❌ Fault Memory / Errors",
+    "LESEN":     "📖 Read / Readout",
+    "SCHREIBEN": "✏️ Write / Coding",
+    "START":     "▶️ Start / System Check",
+    "ENDE":      "⏹️ End / Finish",
     "STOP":      "⏹️ Stop",
-    "IDENT":     "🔍 Identyfikacja",
-    "ADAP":      "🔄 Adaptacje",
-    "VARIANTE":  "🔧 Wariant",
+    "IDENT":     "🔍 Identification",
+    "ADAP":      "🔄 Adaptations",
+    "VARIANTE":  "🔧 Variant",
     "RAM":       "💾 RAM",
     "DATA":      "📁 Data",
-    "C_":        "📡 C_ / Komunikacja",
+    "C_":        "📡 C_ / Communication",
     "EWS":       "🔐 EWS / Immobilizer",
     "SEED":      "🔑 Seed/Key",
     "SLP":       "💡 SLP",
@@ -135,66 +135,66 @@ def get_category(job_name: str) -> str:
 
 
 TABLE_CATEGORIES = {
-    "Błędy": {
+    "Errors": {
         "FEHLERCODES", "FORTTEXTE", "FARTTEXTE", "FARTTEXTEERWEITERT",
         "FUMWELTTEXTE", "FUMWELTMATRIX", "FARTTYP", "FARTTXT_ERW",
         "FDETAILSTRUKTUR",
     },
-    "Statusy": {
+    "Status": {
         "VVTSTATUSBG2_2", "EWSSTART", "EWSEMPFANGSSTATUS", "SLSSTATUS",
         "TEVSTATUS", "STAGEDMTL", "STAGEDMTLFREEZE", "REGEL",
     },
-    "Bity": {"BITS", "FASTABITS", "FGRBITS", "READINESSBITS"},
-    "Komunikacja": {
+    "Bits": {"BITS", "FASTABITS", "FGRBITS", "READINESSBITS"},
+    "Communication": {
         "KONZEPT_TABELLE", "BAUDRATE", "DIAGMODE", "JOBRESULT",
         "JOBRESULTEXTENDED",
     },
 }
 
 TABLE_CATEGORY_COLORS = {
-    "Błędy": ("#8b0000", "#ffffff"),
-    "Statusy": ("#1a5c1a", "#ffffff"),
-    "Bity": ("#003580", "#ffffff"),
-    "Komunikacja": ("#4b0082", "#ffffff"),
-    "Inne": ("#2f4f4f", "#ffffff"),
+    "Errors": ("#8b0000", "#ffffff"),
+    "Status": ("#1a5c1a", "#ffffff"),
+    "Bits": ("#003580", "#ffffff"),
+    "Communication": ("#4b0082", "#ffffff"),
+    "Other": ("#2f4f4f", "#ffffff"),
 }
 
 TABLE_COLUMN_PRESETS = {
     "FEHLERCODES": [
-        ("CODE", "Kod"),
-        ("FEHLERTEXT", "Opis błędu"),
+        ("CODE", "Code"),
+        ("FEHLERTEXT", "Error description"),
     ],
     "BITS": [
-        ("NAME", "Nazwa"),
-        ("BYTE", "Bajt"),
-        ("MASK", "Maska"),
-        ("VALUE", "Wartość"),
+        ("NAME", "Name"),
+        ("BYTE", "Byte"),
+        ("MASK", "Mask"),
+        ("VALUE", "Value"),
     ],
     "FASTABITS": [
-        ("NAME", "Nazwa"),
-        ("BYTE", "Bajt"),
-        ("MASK", "Maska"),
-        ("VALUE", "Wartość"),
+        ("NAME", "Name"),
+        ("BYTE", "Byte"),
+        ("MASK", "Mask"),
+        ("VALUE", "Value"),
     ],
     "FGRBITS": [
-        ("NAME", "Nazwa"),
-        ("BYTE", "Bajt"),
-        ("MASK", "Maska"),
-        ("VALUE", "Wartość"),
+        ("NAME", "Name"),
+        ("BYTE", "Byte"),
+        ("MASK", "Mask"),
+        ("VALUE", "Value"),
     ],
     "READINESSBITS": [
-        ("NAME", "Nazwa"),
-        ("BYTE", "Bajt"),
-        ("MASK", "Maska"),
-        ("VALUE", "Wartość"),
+        ("NAME", "Name"),
+        ("BYTE", "Byte"),
+        ("MASK", "Mask"),
+        ("VALUE", "Value"),
     ],
     "EWSSTART": [
         ("STATI", "Status"),
-        ("TEXT", "Opis"),
+        ("TEXT", "Description"),
     ],
     "EWSEMPFANGSSTATUS": [
         ("STATI", "Status"),
-        ("TEXT", "Opis"),
+        ("TEXT", "Description"),
     ],
 }
 
@@ -204,7 +204,7 @@ def get_table_category(table_name: str) -> str:
     for category, names in TABLE_CATEGORIES.items():
         if upper_name in names:
             return category
-    return "Inne"
+    return "Other"
 
 
 # ---------------------------------------------------------------------------
@@ -413,42 +413,42 @@ class JobListPanel(QWidget):
         title.setObjectName("title_label")
         layout.addWidget(title)
 
-        # Filtr kategorii
-        cat_box = QGroupBox("Kategoria")
+        # Filter by category
+        cat_box = QGroupBox("Category")
         cat_layout = QVBoxLayout(cat_box)
         self.category_combo = QComboBox()
-        self.category_combo.addItem("-- Wszystkie --")
+        self.category_combo.addItem("-- All --")
         for label in sorted(set(JOB_CATEGORIES.values())):
             self.category_combo.addItem(label)
-        self.category_combo.addItem("🔩 Inne")
+        self.category_combo.addItem("🔩 Other")
         self.category_combo.currentTextChanged.connect(self._apply_filter)
         cat_layout.addWidget(self.category_combo)
         layout.addWidget(cat_box)
 
-        # Wyszukiwarka
-        search_box = QGroupBox("Szukaj")
+        # Search
+        search_box = QGroupBox("Search")
         search_layout = QVBoxLayout(search_box)
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Nazwa joba...")
+        self.search_edit.setPlaceholderText("Job name...")
         self.search_edit.textChanged.connect(self._apply_filter)
         search_layout.addWidget(self.search_edit)
         layout.addWidget(search_box)
 
-        # Lista jobów
-        jobs_box = QGroupBox("Lista jobów")
+        # Job list
+        jobs_box = QGroupBox("Job list")
         jobs_layout = QVBoxLayout(jobs_box)
-        self.job_count_label = QLabel("Brak wczytanego pliku")
+        self.job_count_label = QLabel("No file loaded")
         self.job_count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         jobs_layout.addWidget(self.job_count_label)
         self.job_list = QListWidget()
-        self.job_list.setMinimumWidth(220)
+        self.job_count_label.setText("No file loaded")
         jobs_layout.addWidget(self.job_list)
         layout.addWidget(jobs_box)
 
     def load_jobs(self, jobs: list[Job]):
         self._all_jobs = jobs
         self._apply_filter()
-        self.job_count_label.setText(f"Jobów: {len(jobs)}")
+        self.job_count_label.setText(f"Jobs: {len(jobs)}")
 
     def _apply_filter(self):
         search = self.search_edit.text().strip().upper()
@@ -457,7 +457,7 @@ class JobListPanel(QWidget):
         self.job_list.clear()
         for job in self._all_jobs:
             cat = get_category(job.name)
-            if category != "-- Wszystkie --" and cat != category:
+            if category != "-- All --" and cat != category:
                 continue
             if search and search not in job.name.upper():
                 continue
@@ -488,7 +488,7 @@ class JobListPanel(QWidget):
         count = self.job_list.count()
         if self._all_jobs:
             self.job_count_label.setText(
-                f"Pokazano: {count} / {len(self._all_jobs)}"
+                f"Shown: {count} / {len(self._all_jobs)}"
             )
 
 
@@ -503,7 +503,7 @@ class JobDetailPanel(QWidget):
         self._current_job: Job | None = None
         self._current_tables: list[Table] = []
         self._current_prg_file: str = ""
-        self._current_comments_de: str = "Brak komentarzy."
+        self._current_comments_de: str = "No comments."
         self._db: Database | None = None
         self._lang: str = "de"
         self._translation_workers: list[TranslationWorker] = []
@@ -516,7 +516,7 @@ class JobDetailPanel(QWidget):
         layout.setSpacing(4)
 
         # Tytuł
-        self.title_label = QLabel("SZCZEGÓŁY JOBA")
+        self.title_label = QLabel("JOB DETAILS")
         self.title_label.setObjectName("title_label")
         layout.addWidget(self.title_label)
 
@@ -532,10 +532,10 @@ class JobDetailPanel(QWidget):
         self.job_name_label.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
         info_layout.addWidget(self.job_name_label)
 
-        self.job_addr_label = QLabel("Adres: —")
+        self.job_addr_label = QLabel("Address: —")
         info_layout.addWidget(self.job_addr_label)
 
-        self.job_category_label = QLabel("Kategoria: —")
+        self.job_category_label = QLabel("Category: —")
         info_layout.addWidget(self.job_category_label)
 
         sep = QFrame()
@@ -543,11 +543,11 @@ class JobDetailPanel(QWidget):
         sep.setObjectName("separator")
         info_layout.addWidget(sep)
 
-        self.comment_box = QGroupBox("Komentarze z pliku .prg")
+        self.comment_box = QGroupBox("Comments from .prg file")
         comment_layout = QVBoxLayout(self.comment_box)
 
         comment_header = QHBoxLayout()
-        comment_header.addWidget(QLabel("Język:"))
+        comment_header.addWidget(QLabel("Language:"))
         self.lang_combo = QComboBox()
         self.lang_combo.addItem("DE", "de")
         self.lang_combo.addItem("EN", "en")
@@ -563,7 +563,7 @@ class JobDetailPanel(QWidget):
         self.job_comment_label.setTextFormat(Qt.TextFormat.RichText)
         comment_layout.addWidget(self.job_comment_label)
 
-        self.args_label = QLabel("Argumenty (wejście):")
+        self.args_label = QLabel("Arguments (input):")
         self.args_label.setStyleSheet(
             "font-size: 9px; color: #555555; font-weight: bold;"
         )
@@ -571,7 +571,7 @@ class JobDetailPanel(QWidget):
 
         self.args_table = QTableWidget()
         self.args_table.setColumnCount(3)
-        self.args_table.setHorizontalHeaderLabels(["Argument", "Typ", "Opis"])
+        self.args_table.setHorizontalHeaderLabels(["Argument", "Type", "Description"])
         self.args_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.args_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.args_table.setMinimumHeight(80)
@@ -583,7 +583,7 @@ class JobDetailPanel(QWidget):
         self.args_label.hide()
         comment_layout.addWidget(self.args_table)
 
-        self.results_label = QLabel("Wyniki (wyjście):")
+        self.results_label = QLabel("Results (output):")
         self.results_label.setStyleSheet(
             "font-size: 9px; color: #555555; font-weight: bold;"
         )
@@ -591,7 +591,7 @@ class JobDetailPanel(QWidget):
 
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(3)
-        self.results_table.setHorizontalHeaderLabels(["Wynik", "Typ", "Opis"])
+        self.results_table.setHorizontalHeaderLabels(["Result", "Type", "Description"])
         self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.results_table.setMinimumHeight(140)
@@ -612,7 +612,7 @@ class JobDetailPanel(QWidget):
         info_layout.addWidget(comments_resizer, 1)
 
         self._set_translation_state("idle")
-        self.tabs.addTab(info_widget, "ℹ️ Ogólne")
+        self.tabs.addTab(info_widget, "ℹ️ General")
 
         # --- Zakładka: Parametry (BETRIEBSWTAB) ---
         params_widget = QWidget()
@@ -622,7 +622,7 @@ class JobDetailPanel(QWidget):
         self.params_sub_tabs = QTabWidget()
         self.params_sub_tabs.setTabPosition(QTabWidget.TabPosition.North)
         params_layout.addWidget(self.params_sub_tabs)
-        self.tabs.addTab(params_widget, "📊 Parametry")
+        self.tabs.addTab(params_widget, "📊 Parameters")
 
         # --- Zakładka: Disassembly ---
         dis_widget = QWidget()
@@ -653,13 +653,13 @@ class JobDetailPanel(QWidget):
 
         self.title_label.setText(f"JOB: {job.name}")
         self.job_name_label.setText(job.name)
-        self.job_addr_label.setText(f"Adres w pliku: 0x{job.address:08X}")
-        self.job_category_label.setText(f"Kategoria: {get_category(job.name)}")
+        self.job_addr_label.setText(f"Address in file: 0x{job.address:08X}")
+        self.job_category_label.setText(f"Category: {get_category(job.name)}")
 
         # Komentarze
         comments = [c for c in job.comments if not c.startswith("JOBNAME:")]
         job_comment, result_rows, arg_rows = self._parse_job_comments(comments)
-        self._current_comments_de = job_comment or "Brak komentarzy."
+        self._current_comments_de = job_comment or "No comments."
         self.job_comment_label.setText(self._current_comments_de)
 
         self.args_table.setRowCount(len(arg_rows))
@@ -691,7 +691,7 @@ class JobDetailPanel(QWidget):
         # Disassembly
         self.dis_text.setPlainText(
             "\n".join(job.disassembly) if job.disassembly
-            else "; Brak disassembly"
+            else "; No disassembly"
         )
 
     def update_language(self, lang: str):
@@ -762,11 +762,11 @@ class JobDetailPanel(QWidget):
         if fallback_missing:
             html_text = (
                 f"<span>{rendered_text}</span> "
-                f"<span style='color:#808080; font-size: 9px;'>⚠️ brak tłumaczenia</span>"
+                f"<span style='color:#808080; font-size: 9px;'>⚠️ no translation</span>"
             )
             self.job_comment_label.setText(html_text)
             self.job_comment_label.setToolTip(
-                tooltip or "Brak tłumaczenia w bazie i brak połączenia z internetem"
+                tooltip or "No translation in the database and no internet connection"
             )
             self._set_translation_state("ok")
             return
@@ -778,7 +778,7 @@ class JobDetailPanel(QWidget):
             )
             self.job_comment_label.setText(html_text)
             self.job_comment_label.setToolTip(
-                tooltip or "Tłumaczenie automatyczne — zapisano do bazy danych"
+                tooltip or "Automatic translation - saved to the database"
             )
         else:
             self.job_comment_label.setText(safe_text)
@@ -836,7 +836,7 @@ class JobDetailPanel(QWidget):
             self._set_translation_text(
                 translated_text,
                 is_live_translated=True,
-                tooltip="Tłumaczenie automatyczne — zapisano do bazy danych",
+                tooltip="Automatic translation - saved to the database",
             )
 
     def _get_translation(self, prg_file: str, job_name: str, text_de: str, lang: str) -> tuple[str, bool]:
@@ -908,7 +908,7 @@ class JobDetailPanel(QWidget):
 
     def _set_translation_state(self, state: str):
         if state == "missing":
-            self.comment_box.setTitle("Komentarze z pliku .prg — BRAK TŁUMACZENIA")
+            self.comment_box.setTitle("Comments from .prg file - NO TRANSLATION")
             self.job_comment_label.setStyleSheet(
                 "background-color: #ffe4e4;"
                 "border: 1px solid #8b0000;"
@@ -918,7 +918,7 @@ class JobDetailPanel(QWidget):
             )
             return
 
-        self.comment_box.setTitle("Komentarze z pliku .prg")
+        self.comment_box.setTitle("Comments from .prg file")
         if state == "ok":
             self.job_comment_label.setStyleSheet(
                 "color: #000000;"
@@ -1012,7 +1012,7 @@ class JobDetailPanel(QWidget):
             filter_row = QHBoxLayout()
             filter_row.addWidget(QLabel("Filtr:"))
             filter_edit = QLineEdit()
-            filter_edit.setPlaceholderText("Szukaj po wartościach tabeli...")
+            filter_edit.setPlaceholderText("Search table values...")
             filter_row.addWidget(filter_edit)
             layout.addLayout(filter_row)
 
@@ -1104,7 +1104,7 @@ class JobDetailPanel(QWidget):
 
             if not param_names:
                 item = QTreeWidgetItem(
-                    ["Brak danych live data — job zwraca status tekstowy lub wykonuje akcję", "", "", "", "", "", ""]
+                    ["No live data parameters - this job returns a textual status or performs an action", "", "", "", "", "", ""]
                 )
                 tree.addTopLevelItem(item)
                 return page
@@ -1128,7 +1128,7 @@ class JobDetailPanel(QWidget):
 
             if not found:
                 item = QTreeWidgetItem(
-                    ["Brak danych live data — job zwraca status tekstowy lub wykonuje akcję", "", "", "", "", "", ""]
+                    ["No live data parameters - this job returns a textual status or performs an action", "", "", "", "", "", ""]
                 )
                 tree.addTopLevelItem(item)
 
@@ -1136,7 +1136,7 @@ class JobDetailPanel(QWidget):
 
         if not tables:
             placeholder = QWidget()
-            self.params_sub_tabs.addTab(placeholder, "Plik .prg nie zawiera tabel")
+            self.params_sub_tabs.addTab(placeholder, "The .prg file contains no tables")
             self.params_sub_tabs.setTabEnabled(0, False)
             return
 
@@ -1253,12 +1253,12 @@ class JobDetailPanel(QWidget):
         self._current_job = None
         self._current_tables = []
         self._current_prg_file = ""
-        self._current_comments_de = "Brak komentarzy."
-        self.title_label.setText("SZCZEGÓŁY JOBA")
+        self._current_comments_de = "No comments."
+        self.title_label.setText("JOB DETAILS")
         self.job_name_label.setText("—")
-        self.job_addr_label.setText("Adres: —")
-        self.job_category_label.setText("Kategoria: —")
-        self.job_comment_label.setText("Opis: —")
+        self.job_addr_label.setText("Address: —")
+        self.job_category_label.setText("Category: —")
+        self.job_comment_label.setText("Description: —")
         self.args_table.setRowCount(0)
         self.args_table.hide()
         self.args_label.hide()
@@ -1291,18 +1291,18 @@ class TablesPanel(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        left_box = QGroupBox("Tabele z pliku .prg")
+        left_box = QGroupBox("Tables from .prg file")
         left_layout = QVBoxLayout(left_box)
 
         table_search_row = QHBoxLayout()
-        table_search_row.addWidget(QLabel("Tabela:"))
+        table_search_row.addWidget(QLabel("Table:"))
         self.table_search_edit = QLineEdit()
-        self.table_search_edit.setPlaceholderText("Szukaj po nazwie tabeli...")
+        self.table_search_edit.setPlaceholderText("Search by table name...")
         self.table_search_edit.textChanged.connect(self._apply_table_name_filter)
         table_search_row.addWidget(self.table_search_edit)
         left_layout.addLayout(table_search_row)
 
-        self.tables_count_label = QLabel("Brak wczytanego pliku")
+        self.tables_count_label = QLabel("No file loaded")
         self.tables_count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         left_layout.addWidget(self.tables_count_label)
 
@@ -1311,18 +1311,18 @@ class TablesPanel(QWidget):
         self.tables_tree.currentItemChanged.connect(self._on_table_selected)
         left_layout.addWidget(self.tables_tree)
 
-        right_box = QGroupBox("Podgląd tabeli")
+        right_box = QGroupBox("Table preview")
         right_layout = QVBoxLayout(right_box)
 
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Filtr:"))
+        filter_row.addWidget(QLabel("Filter:"))
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Szukaj w wierszach tabeli...")
+        self.filter_edit.setPlaceholderText("Search table rows...")
         self.filter_edit.textChanged.connect(self._apply_filter)
         filter_row.addWidget(self.filter_edit)
         right_layout.addLayout(filter_row)
 
-        self.row_count_label = QLabel("Wybierz tabelę z listy po lewej.")
+        self.row_count_label = QLabel("Select a table from the list on the left.")
         self.row_count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         right_layout.addWidget(self.row_count_label)
 
@@ -1343,14 +1343,14 @@ class TablesPanel(QWidget):
         self.filter_edit.clear()
         self.table_search_edit.clear()
 
-        self.tables_count_label.setText(f"Tablic: {len(tables)}")
+        self.tables_count_label.setText(f"Tables: {len(tables)}")
 
         if not tables:
-            self.row_count_label.setText("Brak tabel w pliku.")
+            self.row_count_label.setText("No tables in the file.")
             return
 
         top_items: dict[str, QTreeWidgetItem] = {}
-        for category in ["Błędy", "Statusy", "Bity", "Komunikacja", "Inne"]:
+        for category in ["Errors", "Status", "Bits", "Communication", "Other"]:
             item = QTreeWidgetItem([category])
             bg, fg = TABLE_CATEGORY_COLORS.get(category, ("#d4d0c8", "#000000"))
             item.setBackground(0, QColor(bg))
@@ -1395,7 +1395,7 @@ class TablesPanel(QWidget):
 
     def _apply_filter(self):
         if not self._current_table:
-            self.row_count_label.setText("Wybierz tabelę z listy po lewej.")
+            self.row_count_label.setText("Select a table from the list on the left.")
             self.table_widget.setRowCount(0)
             self.table_widget.setColumnCount(0)
             return
@@ -1432,8 +1432,8 @@ class TablesPanel(QWidget):
 
         self.table_widget.resizeColumnsToContents()
         self.row_count_label.setText(
-            f"Wiersze: {len(visible_rows)} / {len(rows)}"
-            if query else f"Wiersze: {len(rows)}"
+            f"Rows: {len(visible_rows)} / {len(rows)}"
+            if query else f"Rows: {len(rows)}"
         )
 
     def _apply_table_name_filter(self):
@@ -1454,7 +1454,7 @@ class TablesPanel(QWidget):
 
             top_item.setHidden(visible_children == 0)
 
-        self.tables_count_label.setText(f"Tablic: {visible_tables} / {len(self._tables)}")
+        self.tables_count_label.setText(f"Tables: {visible_tables} / {len(self._tables)}")
 
         current = self.tables_tree.currentItem()
         if current and current.isHidden():
@@ -1494,8 +1494,8 @@ class TablesPanel(QWidget):
         self.table_widget.clear()
         self.table_widget.setRowCount(0)
         self.table_widget.setColumnCount(0)
-        self.tables_count_label.setText("Brak wczytanego pliku")
-        self.row_count_label.setText("Wybierz tabelę z listy po lewej.")
+        self.tables_count_label.setText("No file loaded")
+        self.row_count_label.setText("Select a table from the list on the left.")
         self.filter_edit.clear()
         self.table_search_edit.clear()
 
@@ -1522,17 +1522,17 @@ class ModelsPanel(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        left_box = QGroupBox("Modele INPA")
+        left_box = QGroupBox("INPA Models")
         left_layout = QVBoxLayout(left_box)
 
         controls_row = QHBoxLayout()
-        self.change_path_btn = QPushButton("Zmień ścieżkę INPA")
+        self.change_path_btn = QPushButton("Change INPA path")
         self.change_path_btn.clicked.connect(self.changeInpaPathRequested.emit)
         controls_row.addWidget(self.change_path_btn)
         controls_row.addStretch()
         left_layout.addLayout(controls_row)
 
-        self.inpa_status_label = QLabel("Nie znaleziono instalacji INPA")
+        self.inpa_status_label = QLabel("INPA installation not found")
         self.inpa_status_label.setWordWrap(True)
         left_layout.addWidget(self.inpa_status_label)
 
@@ -1541,18 +1541,18 @@ class ModelsPanel(QWidget):
         self.models_tree.currentItemChanged.connect(self._on_tree_item_changed)
         left_layout.addWidget(self.models_tree)
 
-        right_box = QGroupBox("Szczegóły ECU")
+        right_box = QGroupBox("ECU details")
         right_layout = QVBoxLayout(right_box)
 
         self.description_label = QLabel("—")
         self.description_label.setWordWrap(True)
         right_layout.addWidget(self.description_label)
 
-        self.script_label = QLabel("Skrypt INPA: —")
+        self.script_label = QLabel("INPA script: —")
         self.script_label.setWordWrap(True)
         right_layout.addWidget(self.script_label)
 
-        self.prg_list_label = QLabel("Dostępne pliki PRG:")
+        self.prg_list_label = QLabel("Available PRG files:")
         right_layout.addWidget(self.prg_list_label)
 
         self.prg_list_widget = QListWidget()
@@ -1563,7 +1563,7 @@ class ModelsPanel(QWidget):
         self.prg_status_label.setWordWrap(True)
         right_layout.addWidget(self.prg_status_label)
 
-        self.open_prg_btn = QPushButton("Otwórz plik PRG")
+        self.open_prg_btn = QPushButton("Open PRG file")
         self.open_prg_btn.setEnabled(False)
         self.open_prg_btn.clicked.connect(self._open_selected_prg)
         right_layout.addWidget(self.open_prg_btn)
@@ -1579,7 +1579,7 @@ class ModelsPanel(QWidget):
         self._current_model_name = ""
         self.models_tree.clear()
         self.description_label.setText("—")
-        self.script_label.setText("Skrypt INPA: —")
+        self.script_label.setText("INPA script: —")
         self.prg_list_widget.clear()
         self.prg_status_label.setText(message)
         self.open_prg_btn.setEnabled(False)
@@ -1594,11 +1594,11 @@ class ModelsPanel(QWidget):
 
         self.models_tree.clear()
         self.inpa_status_label.setText(
-            f"INPA: {self._inpa_path}" if self._inpa_path else "Nie znaleziono instalacji INPA"
+            f"INPA: {self._inpa_path}" if self._inpa_path else "INPA installation not found"
         )
 
         if not self._models_data:
-            self.set_placeholder("Nie znaleziono plików .ENG w CFGDAT")
+            self.set_placeholder("No .ENG files found in CFGDAT")
             return
 
         model_names = sorted(self._models_data.keys())
@@ -1656,10 +1656,10 @@ class ModelsPanel(QWidget):
     def _update_details(self):
         if not self._current_entry:
             if self._current_model_name:
-                self.description_label.setText("Wybierz ECU z rozwiniętej listy po lewej.")
+                self.description_label.setText("Select an ECU from the expanded list on the left.")
             else:
-                self.description_label.setText("Najpierw wybierz model po lewej.")
-            self.script_label.setText("Skrypt INPA: —")
+                self.description_label.setText("Select a model on the left first.")
+            self.script_label.setText("INPA script: —")
             self.prg_list_widget.clear()
             self.prg_status_label.setText("—")
             self.open_prg_btn.setEnabled(False)
@@ -1679,10 +1679,10 @@ class ModelsPanel(QWidget):
         self.prg_list_widget.clear()
 
         if not prg_files:
-            item = QListWidgetItem("Brak wykrytych plików PRG")
+            item = QListWidgetItem("No PRG files detected")
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.prg_list_widget.addItem(item)
-            self.prg_status_label.setText("❌ Brak dopasowań")
+            self.prg_status_label.setText("❌ No matches")
             self.open_prg_btn.setEnabled(False)
             self.prg_list_widget.blockSignals(False)
             return
@@ -1730,11 +1730,11 @@ class ModelsPanel(QWidget):
         full_path = current_item.data(Qt.ItemDataRole.UserRole + 1) or ""
 
         if full_path and Path(full_path).exists():
-            self.prg_status_label.setText(f"✅ Znaleziono: {full_path}")
+            self.prg_status_label.setText(f"✅ Found: {full_path}")
             self.open_prg_btn.setEnabled(True)
         else:
             ecu_folder = self._ecu_path or "EDIABAS\\Ecu"
-            self.prg_status_label.setText(f"❌ Nie znaleziono w {ecu_folder}")
+            self.prg_status_label.setText(f"❌ Not found in {ecu_folder}")
             self.open_prg_btn.setEnabled(False)
 
         if not prg_display:
@@ -1767,11 +1767,11 @@ class FileInfoPanel(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 
-        self.file_label  = QLabel("Plik: —")
+        self.file_label  = QLabel("File: —")
         self.ver_label   = QLabel("BIP: —")
         self.rev_label   = QLabel("Rev: —")
-        self.author_label = QLabel("Autor: —")
-        self.date_label  = QLabel("Data: —")
+        self.author_label = QLabel("Author: —")
+        self.date_label  = QLabel("Date: —")
 
         for lbl in [self.file_label, self.ver_label, self.rev_label,
                     self.author_label, self.date_label]:
@@ -1788,11 +1788,11 @@ class FileInfoPanel(QWidget):
 
     def load_info(self, prg: "PrgFile", filepath: str):
         name = Path(filepath).name
-        self.file_label.setText(f"Plik: {name}")
+        self.file_label.setText(f"File: {name}")
         self.ver_label.setText(f"BIP: {prg.info.bip_version}")
         self.rev_label.setText(f"Rev: {prg.info.revision}")
-        self.author_label.setText(f"Autor: {prg.info.author[:30]}")
-        self.date_label.setText(f"Data: {prg.info.last_changed[:24]}")
+        self.author_label.setText(f"Author: {prg.info.author[:30]}")
+        self.date_label.setText(f"Date: {prg.info.last_changed[:24]}")
 
 
 # ---------------------------------------------------------------------------
@@ -1962,11 +1962,11 @@ class MainWindow(QMainWindow):
         dialog.setWindowTitle("Startup Guard")
         dialog.setIcon(QMessageBox.Icon.Warning if has_missing_required else QMessageBox.Icon.Information)
         if has_missing_required:
-            dialog.setText("Wykryto brak wymaganych plików/ścieżek dla pełnego trybu kodowania.")
-            dialog.setInformativeText("Uzupełnij ścieżki w konfiguracji, aby odblokować wszystkie funkcje.")
+            dialog.setText("Missing required files/paths were detected for the full coding flow.")
+            dialog.setInformativeText("Fill in the paths in the configuration to unlock all features.")
         else:
-            dialog.setText("Wszystkie wymagane ścieżki są dostępne.")
-            dialog.setInformativeText("Raport środowiska poniżej.")
+            dialog.setText("All required paths are available.")
+            dialog.setInformativeText("Environment report below.")
         dialog.setDetailedText(report_text)
         dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
         dialog.exec()
@@ -1974,11 +1974,11 @@ class MainWindow(QMainWindow):
     def _run_startup_guard(self):
         _report_text, has_missing_required = self._build_startup_report()
         if has_missing_required:
-            self.status_bar.showMessage("Startup Guard: brakuje części wymaganych plików/ścieżek (szczegóły w raporcie).")
+            self.status_bar.showMessage("Startup Guard: some required files/paths are missing (details in the report).")
             self._show_startup_report(force_show=True)
             return
 
-        self.status_bar.showMessage("Startup Guard: wymagane pliki/ścieżki OK.")
+        self.status_bar.showMessage("Startup Guard: required files/paths OK.")
 
     def _setup_ui(self):
         self.setWindowTitle("BimmerDaten - Expert for EDIABAS and NCS")
@@ -2053,17 +2053,17 @@ class MainWindow(QMainWindow):
         toolbar_layout = QHBoxLayout(toolbar_widget)
         toolbar_layout.setContentsMargins(4, 2, 4, 2)
 
-        self.open_btn = QPushButton("📂 Otwórz .PRG")
+        self.open_btn = QPushButton("📂 Open .PRG")
         self.open_btn.clicked.connect(self._open_file)
         toolbar_layout.addWidget(self.open_btn)
 
-        self.vehicle_info_label = QLabel("Brak wczytanego pliku")
+        self.vehicle_info_label = QLabel("No file loaded")
         self.vehicle_info_label.setWordWrap(True)
         toolbar_layout.addWidget(self.vehicle_info_label, 1)
 
         toolbar_layout.addStretch()
 
-        self.jobs_info = QLabel("Brak wczytanego pliku")
+        self.jobs_info = QLabel("No file loaded")
         toolbar_layout.addWidget(self.jobs_info)
 
         jobs_layout.addWidget(toolbar_widget)
@@ -2080,45 +2080,45 @@ class MainWindow(QMainWindow):
         splitter.setSizes([280, 820])
 
         jobs_layout.addWidget(splitter)
-        self.main_tabs.addTab(jobs_tab, "💼 Joby")
+        self.main_tabs.addTab(jobs_tab, "💼 Jobs")
 
         # Tab 2: tabele
         self.tables_panel = TablesPanel()
-        self.main_tabs.addTab(self.tables_panel, "📋 Tabele")
+        self.main_tabs.addTab(self.tables_panel, "📋 Tables")
 
         # Tab 3: modele INPA
         self.models_panel = ModelsPanel()
         self.models_panel.openPrgRequested.connect(self._open_file_direct)
         self.models_panel.changeInpaPathRequested.connect(self._choose_inpa_path)
-        self.main_tabs.addTab(self.models_panel, "🚗 Modele")
+        self.main_tabs.addTab(self.models_panel, "🚗 Models")
 
         self.models_tab_index = 2
         self.main_tabs.currentChanged.connect(self._on_main_tab_changed)
 
-        self.top_tabs.addTab(diagnosis_tab, "🔧 Diagnoza")
+        self.top_tabs.addTab(diagnosis_tab, "🔧 Diagnosis")
 
         if CODING_AVAILABLE:
             self.coding_panel = CodingPanel(self._db)
         else:
             self.coding_panel = QWidget()
             fallback_layout = QVBoxLayout(self.coding_panel)
-            fallback_layout.addWidget(QLabel("Nie udało się załadować panelu kodowania."))
+            fallback_layout.addWidget(QLabel("Failed to load the coding panel."))
 
-        self.top_tabs.addTab(self.coding_panel, "⚙️ Kodowanie")
+        self.top_tabs.addTab(self.coding_panel, "⚙️ Coding")
 
         if SA_OPTIONS_AVAILABLE:
             self.sa_options_panel = SAOptionsWidget(self._db, self._sa_config, self)
         else:
             self.sa_options_panel = QWidget()
             sa_layout = QVBoxLayout(self.sa_options_panel)
-            sa_layout.addWidget(QLabel("Nie udało się załadować zakładki Opcje SA."))
+            sa_layout.addWidget(QLabel("Failed to load the SA Options tab."))
 
-        self.top_tabs.addTab(self.sa_options_panel, "🔧 Opcje SA")
+        self.top_tabs.addTab(self.sa_options_panel, "🔧 SA Options")
 
         if not self._inpa_path:
-            self.models_panel.set_placeholder("Nie znaleziono instalacji INPA")
+            self.models_panel.set_placeholder("INPA installation not found")
         else:
-            self.models_panel.set_placeholder("Wybierz zakładkę Modele, aby wczytać parser INPA")
+            self.models_panel.set_placeholder("Open the Models tab to load the INPA parser")
 
         # Status bar
         self.status_bar = QStatusBar()
@@ -2134,29 +2134,29 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # Menu Plik
-        file_menu = menubar.addMenu("Plik")
-        open_action = QAction("Otwórz .PRG...", self)
+        file_menu = menubar.addMenu("File")
+        open_action = QAction("Open .PRG...", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self._open_file)
         file_menu.addAction(open_action)
         file_menu.addSeparator()
-        exit_action = QAction("Zakończ", self)
+        exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # Menu Pomoc
-        help_menu = menubar.addMenu("Pomoc")
-        report_action = QAction("Raport startup guard", self)
+        help_menu = menubar.addMenu("Help")
+        report_action = QAction("Startup Guard report", self)
         report_action.triggered.connect(lambda: self._show_startup_report(force_show=True))
         help_menu.addAction(report_action)
-        about_action = QAction("O programie", self)
+        about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
     def _open_file(self):
         if not DECODER_AVAILABLE:
             self.status_bar.showMessage(
-                "BŁĄD: Nie można zaimportować decoderPrg.py!"
+                "ERROR: Cannot import decoderPrg.py!"
             )
             return
 
@@ -2166,7 +2166,7 @@ class MainWindow(QMainWindow):
 
         filepath, _ = QFileDialog.getOpenFileName(
             self,
-            "Otwórz plik EDIABAS PRG",
+            "Open EDIABAS PRG file",
             default_dir,
             "EDIABAS PRG Files (*.prg *.PRG);;All Files (*)"
         )
@@ -2178,11 +2178,11 @@ class MainWindow(QMainWindow):
     def _open_file_direct(self, filepath: str):
         if not DECODER_AVAILABLE:
             self.status_bar.showMessage(
-                "BŁĄD: Nie można zaimportować decoderPrg.py!"
+                "ERROR: Cannot import decoderPrg.py!"
             )
             return
 
-        self.status_bar.showMessage(f"Wczytuję: {filepath}...")
+        self.status_bar.showMessage(f"Loading: {filepath}...")
         QApplication.processEvents()
 
         try:
@@ -2192,18 +2192,18 @@ class MainWindow(QMainWindow):
             self.top_tabs.setCurrentIndex(0)
             self.main_tabs.setCurrentIndex(0)
             self.status_bar.showMessage(
-                f"Wczytano: {Path(filepath).name} — "
-                f"{len(self._prg.jobs)} jobów, "
-                f"{len(self._prg.tables)} tabel"
+                f"Loaded: {Path(filepath).name} — "
+                f"{len(self._prg.jobs)} jobs, "
+                f"{len(self._prg.tables)} tables"
             )
         except Exception as e:
-            self.status_bar.showMessage(f"BŁĄD: {e}")
+            self.status_bar.showMessage(f"ERROR: {e}")
 
     def _choose_inpa_path(self):
         start_dir = self._inpa_path or r"C:\EC-APPS\INPA"
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Wybierz folder INPA",
+            "Choose INPA folder",
             start_dir,
         )
         if not folder:
@@ -2224,7 +2224,7 @@ class MainWindow(QMainWindow):
         try:
             from inpa_parser import INPAParser
         except Exception as exc:
-            self.status_bar.showMessage(f"BŁĄD INPA parsera: {exc}")
+            self.status_bar.showMessage(f"INPA parser error: {exc}")
             return None
 
         self._models_parser_cls = INPAParser
@@ -2232,7 +2232,7 @@ class MainWindow(QMainWindow):
 
     def _load_models_data(self, force_reload: bool = False):
         if not self._inpa_path:
-            self.models_panel.set_placeholder("Nie znaleziono instalacji INPA")
+            self.models_panel.set_placeholder("INPA installation not found")
             return
 
         if not force_reload and self._models_loaded_for_path == self._inpa_path:
@@ -2241,7 +2241,7 @@ class MainWindow(QMainWindow):
 
         parser_cls = self._ensure_inpa_parser()
         if parser_cls is None:
-            self.models_panel.set_placeholder("Nie udało się załadować parsera INPA")
+            self.models_panel.set_placeholder("Failed to load the INPA parser")
             return
 
         try:
@@ -2251,12 +2251,12 @@ class MainWindow(QMainWindow):
             self.models_panel.set_parser(parser)
             self.models_panel.set_models_data(self._models_data, self._inpa_path, self._ecu_path)
             if self._models_data:
-                self.status_bar.showMessage(f"Wczytano modele INPA z {self._inpa_path}")
+                self.status_bar.showMessage(f"Loaded INPA models from {self._inpa_path}")
             else:
-                self.status_bar.showMessage("Nie znaleziono plików .ENG w CFGDAT")
+                self.status_bar.showMessage("No .ENG files found in CFGDAT")
         except Exception as exc:
-            self.models_panel.set_placeholder(f"Błąd wczytywania INPA: {exc}")
-            self.status_bar.showMessage(f"Błąd wczytywania INPA: {exc}")
+            self.models_panel.set_placeholder(f"INPA load error: {exc}")
+            self.status_bar.showMessage(f"INPA load error: {exc}")
 
     def _load_prg(self):
         if not self._prg:
@@ -2267,25 +2267,25 @@ class MainWindow(QMainWindow):
         self.job_detail_panel.clear()
         self._update_vehicle_info_bar()
         self.jobs_info.setText(
-            f"Jobów: {len(self._prg.jobs)} | Tabel: {len(self._prg.tables)}"
+            f"Jobs: {len(self._prg.jobs)} | Tables: {len(self._prg.tables)}"
         )
 
     def _update_vehicle_info_bar(self):
         if not self._prg or not self._filepath:
-            self.vehicle_info_label.setText("Brak wczytanego pliku")
+            self.vehicle_info_label.setText("No file loaded")
             return
 
         file_name = Path(self._filepath).name
         info = self._prg.info
-        parts = [f"Plik: {file_name}"]
+        parts = [f"File: {file_name}"]
         if info.bip_version:
             parts.append(f"BIP: {info.bip_version}")
         if info.revision:
             parts.append(f"Rev: {info.revision}")
         if info.author:
-            parts.append(f"Autor: {info.author}")
+            parts.append(f"Author: {info.author}")
         if info.last_changed:
-            parts.append(f"Data: {info.last_changed}")
+            parts.append(f"Date: {info.last_changed}")
         self.vehicle_info_label.setText(" | ".join(parts))
 
     def _on_job_selected(self, current, previous):
@@ -2308,11 +2308,11 @@ class MainWindow(QMainWindow):
     def _on_language_changed(self, _index: int):
         self._lang = self.job_detail_panel.current_language()
         self.job_detail_panel.update_language(self._lang)
-        self.status_bar.showMessage(f"Język tłumaczeń: {self._lang.upper()}")
+        self.status_bar.showMessage(f"Translation language: {self._lang.upper()}")
 
     def _show_about(self):
         dialog = QDialog(self)
-        dialog.setWindowTitle("O programie")
+        dialog.setWindowTitle("About")
         dialog.setFixedSize(520, 560)
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         dialog.setStyleSheet(WIN98_STYLE)
@@ -2334,9 +2334,9 @@ class MainWindow(QMainWindow):
 
         # Version / author row
         meta = QLabel(
-            "<b>Wersja:</b> v1.0 &nbsp;&nbsp; "
-            "<b>Autor:</b> Filip Dzitko (zer02dev) &nbsp;&nbsp; "
-            "<b>Licencja:</b> GPL-3.0"
+            "<b>Version:</b> v1.0 &nbsp;&nbsp; "
+            "<b>Author:</b> Filip Dzitko (zer02dev) &nbsp;&nbsp; "
+            "<b>License:</b> GPL-3.0"
         )
         meta.setWordWrap(True)
         content_layout.addWidget(meta)
@@ -2350,17 +2350,17 @@ class MainWindow(QMainWindow):
         features = QTextBrowser()
         features.setOpenExternalLinks(True)
         features.setHtml(
-            "<b>Funkcje:</b>"
+            "<b>Features:</b>"
             "<ul style='margin-top:4px; margin-bottom:0; padding-left:18px;'>"
-            "<li>Przeglądarka jobów EDIABAS — argumenty, wyniki, disassembly, tabele</li>"
-            "<li>Live data (BETRIEBSWTAB) z dekodowaniem telegramów DS2</li>"
-            "<li>Edytor kodowania TRC z śledzeniem zmian i historią</li>"
-            "<li>Presety kodowania — zapisz i wczytaj ulubione konfiguracje</li>"
-            "<li>Eksport zmian do .MAN / .TRC</li>"
-            "<li>Tłumaczenia DE → EN / PL (offline DB + online fallback)</li>"
-            "<li>Dekoder FA/SA z plików AT.000 i fa.trc</li>"
-            "<li>Parser modeli INPA z wykrywaniem plików PRG</li>"
-            "<li>Raporty PDF z historią i porównaniem kodowania</li>"
+            "<li>EDIABAS job browser - arguments, results, disassembly, tables</li>"
+            "<li>Live data (BETRIEBSWTAB) with DS2 telegram decoding</li>"
+            "<li>TRC coding editor with change tracking and history</li>"
+            "<li>Coding presets - save and load favorite configurations</li>"
+            "<li>Export changes to .MAN / .TRC</li>"
+            "<li>DE → EN / PL translations (offline DB + online fallback)</li>"
+            "<li>FA/SA decoder from AT.000 and fa.trc files</li>"
+            "<li>INPA model parser with PRG file discovery</li>"
+            "<li>PDF reports with coding history and comparison</li>"
             "</ul>"
         )
         features.setMaximumHeight(185)
@@ -2375,11 +2375,11 @@ class MainWindow(QMainWindow):
         credits = QTextBrowser()
         credits.setOpenExternalLinks(True)
         credits.setHtml(
-            "<b>Zależności:</b> PyQt6, deep-translator, reportlab<br><br>"
-            "<b>Tłumaczenia parametrów NCS:</b> Translations.csv &copy; REVTOR "
-            "(NCS Dummy) — nie jest dołączone do programu, "
-            "wczytywane z lokalnej instalacji użytkownika.<br><br>"
-            "<b>Zgłoszenia błędów:</b> "
+            "<b>Dependencies:</b> PyQt6, deep-translator, reportlab<br><br>"
+            "<b>NCS parameter translations:</b> Translations.csv &copy; REVTOR "
+            "(NCS Dummy) - not bundled with the app, "
+            "loaded from the user's local installation.<br><br>"
+            "<b>Bug reports:</b> "
             "<a href='https://github.com/zer02dev/BimmerDaten/issues'>"
             "github.com/zer02dev/BimmerDaten</a>"
         )
@@ -2403,15 +2403,15 @@ class MainWindow(QMainWindow):
         man_path = Path(r"C:\NCSEXPER\WORK\FSW_PSW.MAN")
         if man_path.exists() and man_path.stat().st_size > 0:
             dialog = QMessageBox(self)
-            dialog.setWindowTitle("Zamknąć program?")
+            dialog.setWindowTitle("Close application?")
             dialog.setText(
-                "Plik FSW_PSW.MAN nie jest pusty.\n\n"
-                "Dobra praktyka NCS Expert wymaga wyzerowania pliku po zakończeniu pracy.\n"
-                "Czy chcesz wyczyścić FSW_PSW.MAN?"
+                "FSW_PSW.MAN is not empty.\n\n"
+                "Good NCS Expert practice is to clear the file after finishing work.\n"
+                "Do you want to clear FSW_PSW.MAN?"
             )
-            clear_button = dialog.addButton("Tak — wyczyść", QMessageBox.ButtonRole.YesRole)
-            no_button = dialog.addButton("Nie", QMessageBox.ButtonRole.NoRole)
-            cancel_button = dialog.addButton("Anuluj zamykanie", QMessageBox.ButtonRole.RejectRole)
+            clear_button = dialog.addButton("Yes - clear it", QMessageBox.ButtonRole.YesRole)
+            no_button = dialog.addButton("No", QMessageBox.ButtonRole.NoRole)
+            cancel_button = dialog.addButton("Cancel closing", QMessageBox.ButtonRole.RejectRole)
             dialog.exec()
 
             clicked_button = dialog.clickedButton()
@@ -2423,7 +2423,7 @@ class MainWindow(QMainWindow):
                     with man_path.open("w", encoding="utf-8"):
                         pass
                 except Exception as exc:
-                    QMessageBox.critical(self, "Błąd", f"Nie udało się wyczyścić pliku:\n{exc}")
+                    QMessageBox.critical(self, "Error", f"Failed to clear the file:\n{exc}")
                     play_sound("error")
                     event.ignore()
                     return

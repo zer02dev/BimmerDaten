@@ -46,15 +46,15 @@ class SATranslationWorker(QThread):
 
 class SAOptionsWidget(QWidget):
     CATEGORIES = [
-        "Wszystkie",
-        "Silnik",
-        "Skrzynia",
-        "Bezpieczeństwo",
-        "Komfort",
+        "All",
+        "Engine",
+        "Transmission",
+        "Safety",
+        "Comfort",
         "Multimedia",
-        "Oświetlenie",
-        "Nadwozie",
-        "Inne",
+        "Lighting",
+        "Body",
+        "Other",
     ]
 
     def __init__(self, db: Database | None, config: dict | None = None, parent=None):
@@ -89,18 +89,18 @@ class SAOptionsWidget(QWidget):
         self.vin_label = QLabel("VIN: —")
         top.addWidget(self.vin_label, 1)
 
-        self.load_btn = QPushButton("📂 Załaduj fa.trc")
+        self.load_btn = QPushButton("📂 Load fa.trc")
         self.load_btn.clicked.connect(self._load_fa_trc)
         top.addWidget(self.load_btn)
 
-        top.addWidget(QLabel("Kategoria:"))
+        top.addWidget(QLabel("Category:"))
         self.category_combo = QComboBox()
         self.category_combo.addItems(self.CATEGORIES)
         self.category_combo.currentIndexChanged.connect(self._populate_table)
         top.addWidget(self.category_combo)
 
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("🔍 Szukaj SA lub opisu...")
+        self.search_edit.setPlaceholderText("🔍 Search SA or description...")
         self.search_edit.textChanged.connect(self._populate_table)
         top.addWidget(self.search_edit, 1)
 
@@ -110,9 +110,9 @@ class SAOptionsWidget(QWidget):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels([
             "SA",
-            "Nazwa ASW",
-            "Opis DE",
-            "Opis EN",
+            "ASW name",
+            "Description DE",
+            "Description EN",
             "Coding",
         ])
         self.table.setColumnWidth(0, 60)
@@ -126,7 +126,7 @@ class SAOptionsWidget(QWidget):
         self.table.cellDoubleClicked.connect(self._on_table_double_clicked)
         root.addWidget(self.table, 1)
 
-        self.status_label = QLabel("Łącznie: 0 opcji")
+        self.status_label = QLabel("Total: 0 options")
         root.addWidget(self.status_label)
 
     def _load_models(self):
@@ -143,7 +143,7 @@ class SAOptionsWidget(QWidget):
         start_dir = self.work_folder if Path(self.work_folder).exists() else str(Path.home())
         path = QFileDialog.getOpenFileName(
             self,
-            "Załaduj fa.trc",
+            "Load fa.trc",
             start_dir,
             "Trace files (*.trc *.TRC);;All files (*)",
         )[0]
@@ -163,13 +163,13 @@ class SAOptionsWidget(QWidget):
         chassis = (self.model_combo.currentText() or "").strip().upper()
         if not chassis:
             self.table.setRowCount(0)
-            self.status_label.setText("Łącznie: 0 opcji")
+            self.status_label.setText("Total: 0 options")
             return
 
         all_options = parse_at_file(chassis, self.daten_folder)
 
         category = self.category_combo.currentText()
-        if category and category != "Wszystkie":
+        if category and category != "All":
             all_options = [o for o in all_options if o.get("category") == category]
 
         query = (self.search_edit.text() or "").strip().lower()
@@ -202,7 +202,7 @@ class SAOptionsWidget(QWidget):
             self.table.setItem(row, 0, QTableWidgetItem(sa_code))
             self.table.setItem(row, 1, QTableWidgetItem(asw_name or "—"))
             self.table.setItem(row, 2, QTableWidgetItem(desc_de))
-            self.table.setItem(row, 3, QTableWidgetItem(desc_en or "(dwuklik, aby tłumaczyć)"))
+            self.table.setItem(row, 3, QTableWidgetItem(desc_en or "(double-click to translate)"))
 
             coding_item = QTableWidgetItem("✅" if bool(opt.get("codierrelevant")) else "❌")
             coding_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -227,11 +227,11 @@ class SAOptionsWidget(QWidget):
 
         if vehicle_codes:
             self.status_label.setText(
-                f"Łącznie: {total} opcji SA | Twoje auto: {vehicle_count} | Codierrelevant: {coding_count}"
+                f"Total: {total} SA options | Your car: {vehicle_count} | Coding relevant: {coding_count}"
             )
         else:
             self.status_label.setText(
-                f"Łącznie: {total} opcji SA | Codierrelevant: {coding_count} | Załaduj fa.trc aby zobaczyć wyposażenie auta"
+                f"Total: {total} SA options | Coding relevant: {coding_count} | Load fa.trc to see the vehicle equipment"
             )
 
         self.table.resizeRowsToContents()
@@ -257,7 +257,7 @@ class SAOptionsWidget(QWidget):
                 self.table.setItem(row, 3, QTableWidgetItem(cached))
                 return
 
-        self.table.setItem(row, 3, QTableWidgetItem("⏳ tłumaczenie..."))
+        self.table.setItem(row, 3, QTableWidgetItem("⏳ translating..."))
         self._queue_translation(chassis, sa_code, desc_de)
 
     def _queue_translation(self, chassis: str, sa_code: str, desc_de: str):
