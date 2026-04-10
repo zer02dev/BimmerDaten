@@ -199,3 +199,6 @@ BimmerDaten to narzędzie dla entuzjastów i techników pracujących z plikami d
 Projekt jest open source na licencji GPL-3.0. Błędy i sugestie zgłaszaj przez GitHub Issues — każde zgłoszenie jest mile widziane.
 
 > **Uwaga:** Nieprawidłowe kodowanie modułów może uszkodzić pojazd. Zawsze rób kopię zapasową danych kodowania przed wprowadzeniem jakichkolwiek zmian.
+
+
+TEST
