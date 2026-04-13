@@ -186,3 +186,5 @@ LWS5,STATUS_DIGITAL,"Bereich: 0, wenn FALSE / 1, wenn TRUE",Range: 0 if FALSE / 
 LWS5,STATUS_SG_DIGITAL,"Bereich: 0, wenn FALSE / 1, wenn TRUE",Range: 0 if FALSE / 1 if TRUE,,2026-04-09 20:13:24
 LWS5,STATUS_SG_ONLINE,Auslesen der analogen Online-Werte des LWS5,Reading out the analog online values ​​of the LWS5,,2026-04-09 20:13:26
 ME9K_5,FS_LESEN_LANG,Fehlerspeicher auslesen,Read out error memory,Odczytaj pamięć błędów,2026-04-10 12:00:05
+EWS3,STEUERN_DIGITAL,Ansteuern / Vorgeben digitaler Stati der EWS3,Controlling/specifying digital statuses of the EWS3,,2026-04-13 18:16:06
+DSC_MK60,FS_LOESCHEN,Job DIAGNOSE_MODE ist integriert,Job DIAGNOSE_MODE is integrated,Zadanie DIAGNOSE_MODE jest zintegrowane,2026-04-13 19:24:46
