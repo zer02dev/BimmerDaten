@@ -64,6 +64,7 @@ Thumbs.db
 
 # Project-specific generated/runtime files
 data/database.db
+installer/output/
 *.trc
 *.000
 *.MAN
