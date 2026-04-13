@@ -11,6 +11,7 @@ import configparser
 import json
 import re
 import webbrowser
+import logging
 from html import escape as html_escape
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,6 +50,9 @@ from database import Database
 from daten_parser import detect_module_from_trc, load_module, parse_trc as parse_trc_file
 from trc_translator import TrcTranslator
 
+
+logger = logging.getLogger("bimmerdaten.trc_coding")
+
 try:
     import winreg
 except Exception:
@@ -86,7 +90,7 @@ def play_sound(sound_type: str = "success") -> None:
         elif sound_type == "info":
             winsound.Beep(1200, 80)
     except Exception:
-        pass
+        logger.exception("Failed to play sound: %s", sound_type)
 
 
 
@@ -124,6 +128,7 @@ def _read_ncs_last_profile_name() -> str:
             value, _ = winreg.QueryValueEx(key, "LastProfile")
             return str(value or "").strip()
     except Exception:
+        logger.exception("Failed to read NCS LastProfile from registry")
         return ""
 
 
@@ -138,6 +143,7 @@ def _parse_pfl_profile(pfl_path: Path) -> dict:
     try:
         text = read_text_file(pfl_path)
     except Exception:
+        logger.exception("Failed to read PFL profile file: %s", pfl_path)
         return result
 
     parser = configparser.ConfigParser(interpolation=None)
@@ -145,6 +151,7 @@ def _parse_pfl_profile(pfl_path: Path) -> dict:
     try:
         parser.read_string(text)
     except Exception:
+        logger.exception("Failed to parse PFL profile as INI: %s", pfl_path)
         parser = None
 
     values: dict[str, str] = {}
@@ -453,6 +460,7 @@ def _read_json_config() -> dict:
     try:
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except Exception:
+        logger.exception("Failed to read coding paths config: %s", CONFIG_PATH)
         return {}
 
 
@@ -855,7 +863,7 @@ class HistoryCompareDialog(QDialog):
                         boldItalicFont=bold_font_name,
                     )
                 except Exception:
-                    pass
+                    logger.exception("Failed to register PDF font family")
             else:
                 bold_font_name = base_font_name
 
@@ -1162,6 +1170,7 @@ class HistoryCompareDialog(QDialog):
         try:
             return int(source.split(":", 1)[1])
         except Exception:
+            logger.exception("Failed to parse history id from source: %s", source)
             return 0
 
     def _refresh_version_combos(self, versions: list[dict]):
@@ -3135,7 +3144,7 @@ class CodingPanel(QWidget):
         try:
             webbrowser.open(url)
         except Exception:
-            pass
+            logger.exception("Failed to open browser for query: %s", query)
 
     def _apply_table_filter(self):
         if not self._table_entries:
@@ -3489,7 +3498,7 @@ class CodingPanel(QWidget):
                     sa_codes=list(fa_data.get("sa_codes", []) or []),
                 )
             except Exception:
-                pass
+                logger.exception("Failed to save TRC history entry")
 
         self._baseline_content = content_after
         for segment_index in self._option_rows:
@@ -3590,7 +3599,7 @@ class CodingPanel(QWidget):
                 parsed = datetime.strptime(exported_at, "%Y-%m-%d %H:%M:%S")
                 exported_at = parsed.strftime("%Y-%m-%d %H:%M")
             except Exception:
-                pass
+                logger.exception("Failed to parse exported_at in history label: %s", exported_at)
 
         label = exported_at or "No date"
         if module:

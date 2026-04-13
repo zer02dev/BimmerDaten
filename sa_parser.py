@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+
+
+logger = logging.getLogger("bimmerdaten.sa_parser")
 
 
 def find_at_file(chassis: str, daten_folder: str) -> Path | None:
@@ -38,6 +42,7 @@ def find_at_file(chassis: str, daten_folder: str) -> Path | None:
             if p3.exists() and p3.is_file():
                 return p3
     except Exception:
+        logger.exception("Failed while scanning DATEN subfolders for %s", filename)
         return None
 
     return None
@@ -76,6 +81,7 @@ def list_available_chassis(daten_folder: str) -> list[str]:
                     if chassis_name:
                         found.add(chassis_name)
     except Exception:
+        logger.exception("Failed while listing available chassis in %s", daten_folder)
         return sorted(found)
 
     return sorted(found)
@@ -147,6 +153,7 @@ def parse_at_file(chassis: str, daten_folder: str) -> list[dict]:
                     }
                 )
     except Exception:
+        logger.exception("Failed parsing AT file: %s", at_path)
         return []
 
     return options
@@ -157,6 +164,7 @@ def parse_fa_trc(fa_path: str) -> list[str]:
     try:
         content = Path(fa_path).read_text(encoding="latin-1", errors="ignore").strip()
     except Exception:
+        logger.exception("Failed reading FA trace file: %s", fa_path)
         return []
 
     if not content:

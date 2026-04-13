@@ -40,7 +40,6 @@ Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
-Name: "devshortcut"; Description: "Create a Start Menu shortcut for Dev profile (--dev)"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
 Source: "..\dist\BimmerDaten\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -48,7 +47,6 @@ Source: "..\dist\BimmerDaten\*"; DestDir: "{app}"; Flags: ignoreversion recurses
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{autoprograms}\{#MyAppName} (Dev)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--dev"; Tasks: devshortcut
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent

@@ -6,8 +6,12 @@ Parser for INPA configuration files (.ENG and .IPO).
 from __future__ import annotations
 
 import re
+import logging
 from pathlib import Path
 from typing import Optional
+
+
+logger = logging.getLogger("bimmerdaten.inpa_parser")
 
 
 class INPAParser:
@@ -225,6 +229,7 @@ class INPAParser:
         try:
             data = ipo_path.read_bytes()
         except Exception:
+            logger.exception("Failed to read IPO file: %s", ipo_path)
             return []
 
         results: list[str] = []

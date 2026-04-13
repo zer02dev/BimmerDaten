@@ -8,8 +8,12 @@ from __future__ import annotations
 import json
 import sqlite3
 import urllib.error
+import logging
 from pathlib import Path
 from typing import Optional
+
+
+logger = logging.getLogger("bimmerdaten.database")
 
 
 class Database:
@@ -52,6 +56,7 @@ class Database:
         try:
             seed_files = sorted(seeds_dir.glob("*.csv"))
         except Exception:
+            logger.exception("Failed to list seed files in %s", seeds_dir)
             return
 
         for seed_file in seed_files:
@@ -830,6 +835,7 @@ class Database:
                     else:
                         existing_count += 1
                 except Exception:
+                    logger.exception("Failed inserting GitHub seed row into %s", table_name)
                     pass
 
             self.conn.commit()
@@ -886,6 +892,7 @@ class Database:
                     if self.conn.total_changes > before:
                         added_count += 1
                 except Exception:
+                    logger.exception("Failed inserting CSV row from %s into %s", file_path, table_name)
                     pass
 
             self.conn.commit()
@@ -911,7 +918,7 @@ class Database:
         try:
             self.conn.close()
         except Exception:
-            pass
+            logger.exception("Failed to close database connection")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import logging
+
+
+logger = logging.getLogger("bimmerdaten.daten_parser")
 
 
 def parse_swt_dat(filepath: str) -> dict[int, str]:
@@ -24,6 +28,7 @@ def parse_swt_dat(filepath: str) -> dict[int, str]:
                     pos = str_end + 1
                     continue
                 except Exception:
+                    logger.exception("Failed parsing SWT entry at offset %s in %s", pos, filepath)
                     pass
         pos += 1
     return result
@@ -53,6 +58,7 @@ def parse_cxx(filepath: str, fsw_dict: dict, psw_dict: dict) -> list[dict]:
                 if _looks_like_group_name(group_name):
                     current_group = group_name
             except Exception:
+                logger.exception("Failed parsing CXX group name at offset %s in %s", pos, filepath)
                 pass
         elif data[pos + 2] == 0x12 and data[pos + 3] == 0x00:
             try:
@@ -111,6 +117,7 @@ def parse_cxx(filepath: str, fsw_dict: dict, psw_dict: dict) -> list[dict]:
                         }
                     )
             except Exception:
+                logger.exception("Failed parsing CXX option block at offset %s in %s", pos, filepath)
                 pass
         pos += 1
     return options

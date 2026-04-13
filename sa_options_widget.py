@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
@@ -25,6 +26,9 @@ from sa_parser import list_available_chassis, parse_at_file, parse_fa_trc
 from trc_coding import parse_sysdaten
 
 
+logger = logging.getLogger("bimmerdaten.sa_options_widget")
+
+
 class SATranslationWorker(QThread):
     finished = pyqtSignal(str, str, str)  # chassis, sa_code, desc_en
 
@@ -41,6 +45,7 @@ class SATranslationWorker(QThread):
             translated = GoogleTranslator(source="german", target="english").translate(self.desc_de)
             self.finished.emit(self.chassis, self.sa_code, translated or "")
         except Exception:
+            logger.exception("SA translation worker failed for code %s", self.sa_code)
             self.finished.emit(self.chassis, self.sa_code, "")
 
 
@@ -349,7 +354,7 @@ class SAOptionsWidget(QWidget):
                 self._workers.remove(worker)
             worker.deleteLater()
         except Exception:
-            pass
+            logger.exception("Failed to clean up SA translation worker")
 
     def _on_translation_done(self, chassis: str, sa_code: str, desc_en: str):
         key = (chassis, sa_code)

@@ -6,10 +6,14 @@ Lokalny translator dla nazw opcji i wartości z pliku Translations.csv.
 from __future__ import annotations
 
 import csv
+import logging
 from pathlib import Path
 
 
 DEFAULT_TRANSLATIONS_PATH = Path(r"C:\NCS Dummy\Translations.csv")
+
+
+logger = logging.getLogger("bimmerdaten.trc_translator")
 
 
 class TrcTranslator:
@@ -92,6 +96,7 @@ class TrcTranslator:
         try:
             return csv.Sniffer().sniff(sample_text, delimiters=";,\t|")
         except Exception:
+            logger.exception("Failed to sniff CSV dialect, using csv.excel fallback")
             return csv.excel
 
     def _looks_like_header(self, header: list[str]) -> bool:

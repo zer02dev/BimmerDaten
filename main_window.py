@@ -2,6 +2,7 @@ import sys
 import platform
 import json
 import os
+import logging
 from pathlib import Path
 from html import escape as html_escape
 from PyQt6.QtWidgets import (
@@ -16,6 +17,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap
+
+from app_logger import get_log_file_path, get_logs_dir_path, setup_logger
+
+
+logger = logging.getLogger("bimmerdaten.main_window")
 
 # Import naszego dekodera
 try:
@@ -67,7 +73,7 @@ def play_sound(sound_type: str = "success") -> None:
         elif sound_type == "info":
             winsound.Beep(1200, 80)
     except Exception:
-        pass
+        logger.exception("Failed to play sound: %s", sound_type)
 
 
 def _normalize_profile_name(raw_value: str) -> str:
@@ -127,6 +133,7 @@ class TranslationWorker(QThread):
                 self.text_de,
             )
         except Exception:
+            logger.exception("Translation worker failed for job '%s' (%s)", self.job_name, self.lang)
             self.translationFinished.emit(
                 self.prg_file,
                 self.job_name,
@@ -159,7 +166,7 @@ class UpdateCheckWorker(QThread):
             local_date = datetime.strptime(local, "%Y-%m-%d").date()
             return remote_date > local_date
         except Exception:
-            pass
+            logger.exception("Failed to parse seed version dates: local=%s remote=%s", local, remote)
 
         # Fallback for semantic-ish versions and other formats.
         return remote > local
@@ -173,7 +180,7 @@ class UpdateCheckWorker(QThread):
             if self._is_remote_newer(remote):
                 self.update_available.emit(remote)
         except Exception:
-            pass
+            logger.exception("Seed update check failed")
 
 
 # ---------------------------------------------------------------------------
@@ -906,7 +913,7 @@ class JobDetailPanel(QWidget):
                 elif lang == "pl":
                     self._db.save_translation(prg_file, job_name, comment_de=original_de, comment_pl=translated_text)
             except Exception:
-                pass
+                logger.exception("Failed to save translated job comment: %s/%s", prg_file, job_name)
 
         if not translated_text:
             if (
@@ -1352,6 +1359,7 @@ class JobDetailPanel(QWidget):
             parts.append(f"0x{checksum:02X}")
             return ", ".join(parts)
         except Exception:
+            logger.exception("Failed to format telegram hex")
             return raw_hex
 
     def clear(self):
@@ -1997,15 +2005,18 @@ class FileInfoPanel(QWidget):
 class MainWindow(QMainWindow):
 
     def __init__(self):
+        logger.info("MainWindow.__init__: start")
         super().__init__()
         self._prg: PrgFile | None = None
         self._filepath: str = ""
         self._lang: str = "de"
         self._db: Database | None = None
+        logger.info("MainWindow.__init__: resolving runtime paths")
         self._runtime_profile: str = get_runtime_profile()
         self._db_path: Path = get_runtime_db_path(self._runtime_profile)
         self._inpa_path: str = self._detect_inpa_path() or ""
         self._ecu_path: str = self._detect_ecu_path() or ""
+        logger.info("MainWindow.__init__: paths resolved (db=%s)", self._db_path)
         self._models_data: dict = {}
         self._models_loaded_for_path: str = ""
         self._models_parser_cls = None
@@ -2013,18 +2024,26 @@ class MainWindow(QMainWindow):
         self._update_worker: UpdateCheckWorker | None = None
 
         if DB_AVAILABLE:
+            logger.info("MainWindow.__init__: initializing database")
             try:
                 self._db = Database(str(self._db_path))
             except Exception:
+                logger.exception("MainWindow.__init__: database initialization failed")
                 self._db = None
+        else:
+            logger.warning("MainWindow.__init__: database module unavailable")
 
+        logger.info("MainWindow.__init__: setting app icon")
         self._set_app_icon()
 
+        logger.info("MainWindow.__init__: UI setup")
         self._setup_ui()
         self._setup_menu()
         self._start_update_check()
         self.setStyleSheet(WIN98_STYLE)
+        logger.info("MainWindow.__init__: scheduling startup guard")
         QTimer.singleShot(0, self._run_startup_guard)
+        logger.info("MainWindow.__init__: done")
 
     def _detect_inpa_path(self) -> str | None:
         for candidate in [
@@ -2065,6 +2084,7 @@ class MainWindow(QMainWindow):
                 "work": work_path,
             }
         except Exception:
+            logger.exception("Failed to load SA config from %s", config_path)
             return defaults
 
     def _set_app_icon(self):
@@ -2088,6 +2108,7 @@ class MainWindow(QMainWindow):
         try:
             payload = json.loads(config_path.read_text(encoding="utf-8"))
         except Exception:
+            logger.exception("Failed to read startup path config from %s", config_path)
             return defaults
 
         daten_path = str(payload.get("daten_path") or defaults["daten_path"]).strip() or defaults["daten_path"]
@@ -2384,9 +2405,24 @@ class MainWindow(QMainWindow):
         report_action = QAction("Startup Guard report", self)
         report_action.triggered.connect(lambda: self._show_startup_report(force_show=True))
         help_menu.addAction(report_action)
+        logs_action = QAction("Open Logs Folder", self)
+        logs_action.triggered.connect(self._open_logs_folder)
+        help_menu.addAction(logs_action)
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    def _open_logs_folder(self):
+        logs_dir = Path(get_logs_dir_path())
+        try:
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            if platform.system() == "Windows":
+                os.startfile(str(logs_dir))
+            else:
+                QMessageBox.information(self, "Logs", f"Logs folder:\n{logs_dir}")
+        except Exception:
+            logger.exception("Failed to open logs folder: %s", logs_dir)
+            QMessageBox.warning(self, "Logs", f"Failed to open logs folder:\n{logs_dir}")
 
     def _start_update_check(self):
         if not self._db:
@@ -2401,7 +2437,7 @@ class MainWindow(QMainWindow):
             if version_file.exists():
                 bundled_version = version_file.read_text(encoding="utf-8").strip()
         except Exception:
-            pass
+            logger.exception("Failed to read bundled seeds version file")
 
         if not local_version:
             local_version = bundled_version or "0000-00-00"
@@ -2409,7 +2445,7 @@ class MainWindow(QMainWindow):
                 try:
                     self._db.set_setting("seeds_version", local_version)
                 except Exception:
-                    pass
+                    logger.exception("Failed to bootstrap seeds_version setting")
 
         self._update_worker = UpdateCheckWorker(local_version)
         self._update_worker.update_available.connect(self._on_update_available)
@@ -2462,7 +2498,7 @@ class MainWindow(QMainWindow):
                     self._db.set_setting("seeds_version", remote_version)
                 self.update_bar.setVisible(False)
             except Exception:
-                pass
+                logger.exception("Failed to persist seeds_version after GitHub update")
 
         lines = []
         for table, result in results.items():
@@ -3000,17 +3036,46 @@ class SplashScreen(QWidget):
         QApplication.processEvents()
 
 def main():
+    session_logger = setup_logger()
+    session_logger.info("main(): startup")
+
+    def _handle_unhandled_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+
+        session_logger.exception(
+            "Unhandled exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+        log_path = get_log_file_path() or "(log file not initialized)"
+        message = (
+            f"Unexpected error:\n{exc_value}\n\n"
+            f"Log file:\n{log_path}"
+        )
+        try:
+            QMessageBox.critical(None, "BimmerDaten - Error", message)
+        except Exception:
+            session_logger.exception("Failed to show critical error dialog")
+
+    sys.excepthook = _handle_unhandled_exception
+
+    session_logger.info("main(): before Windows AppUserModelID setup")
     if platform.system() == "Windows":
         try:
+            session_logger.info("main(): before import ctypes")
             import ctypes
+            session_logger.info("main(): after import ctypes")
 
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
                 "BimmerDaten.PRGViewer"
             )
         except Exception:
-            pass
+            session_logger.exception("main(): failed setting Windows AppUserModelID")
 
+    session_logger.info("main(): before QApplication construction")
     app = QApplication(sys.argv)
+    session_logger.info("main(): after QApplication construction")
     app.setApplicationName("BimmerDaten")
     app.setStyle("Windows")  # styl Windows dla lepszego efektu retro
     icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
@@ -3028,13 +3093,18 @@ def main():
     app.processEvents()
 
     splash.set_status("Building interface...")
+    session_logger.info("main(): before MainWindow() construction")
     window = MainWindow()
+    session_logger.info("main(): after MainWindow() construction")
 
     splash.set_status("Ready.")
     app.processEvents()
 
     window.show()
+    session_logger.info("main(): before splash.close()")
     splash.close()
+    session_logger.info("main(): after splash.close()")
+    session_logger.info("main(): entering Qt event loop")
     sys.exit(app.exec())
 
 
