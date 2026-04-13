@@ -52,19 +52,3 @@ Name: "{autoprograms}\{#MyAppName} (Dev)"; Filename: "{app}\{#MyAppExeName}"; Pa
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
-
-[Code]
-function InitializeSetup(): Boolean;
-var
-  DistExe: string;
-begin
-  DistExe := ExpandConstant('{src}\..\dist\BimmerDaten\{#MyAppExeName}');
-  if not FileExists(DistExe) then
-  begin
-    MsgBox('Missing build output. Run: pyinstaller BimmerDaten.spec before compiling installer.', mbError, MB_OK);
-    Result := False;
-    exit;
-  end;
-
-  Result := True;
-end;
