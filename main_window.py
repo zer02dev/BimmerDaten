@@ -1,6 +1,7 @@
 import sys
 import platform
 import json
+import os
 from pathlib import Path
 from html import escape as html_escape
 from PyQt6.QtWidgets import (
@@ -69,6 +70,38 @@ def play_sound(sound_type: str = "success") -> None:
         pass
 
 
+def _normalize_profile_name(raw_value: str) -> str:
+    profile = (raw_value or "").strip().lower()
+    if not profile or profile in {"prod", "production", "default", "release"}:
+        return ""
+    if profile in {"dev", "development"}:
+        return "Dev"
+    return ""
+
+
+def get_runtime_profile() -> str:
+    # CLI has priority, then environment variable.
+    for arg in sys.argv[1:]:
+        if arg.startswith("--profile="):
+            return _normalize_profile_name(arg.split("=", 1)[1])
+        if arg == "--dev":
+            return "Dev"
+
+    env_profile = os.environ.get("BIMMERDATEN_PROFILE", "")
+    return _normalize_profile_name(env_profile)
+
+
+def get_appdata_root(profile: str = "") -> Path:
+    appdata = os.environ.get("LOCALAPPDATA")
+    base = Path(appdata) if appdata else (Path.home() / "AppData" / "Local")
+    suffix = f"-{profile}" if profile else ""
+    return base / f"BimmerDaten{suffix}"
+
+
+def get_runtime_db_path(profile: str = "") -> Path:
+    return get_appdata_root(profile) / "database.db"
+
+
 
 class TranslationWorker(QThread):
     translationFinished = pyqtSignal(str, str, str, str, str)
@@ -112,13 +145,32 @@ class UpdateCheckWorker(QThread):
         super().__init__(parent)
         self.local_version = local_version
 
+    def _is_remote_newer(self, remote: str) -> bool:
+        local = (self.local_version or "").strip()
+        remote = (remote or "").strip()
+        if not remote:
+            return False
+
+        # Prefer strict date compare for version.txt format: YYYY-MM-DD
+        try:
+            from datetime import datetime
+
+            remote_date = datetime.strptime(remote, "%Y-%m-%d").date()
+            local_date = datetime.strptime(local, "%Y-%m-%d").date()
+            return remote_date > local_date
+        except Exception:
+            pass
+
+        # Fallback for semantic-ish versions and other formats.
+        return remote > local
+
     def run(self):
         try:
             import urllib.request
 
             with urllib.request.urlopen(self.VERSION_URL, timeout=5) as resp:
                 remote = resp.read().decode("utf-8").strip()
-            if remote and remote > self.local_version:
+            if self._is_remote_newer(remote):
                 self.update_available.emit(remote)
         except Exception:
             pass
@@ -1950,6 +2002,8 @@ class MainWindow(QMainWindow):
         self._filepath: str = ""
         self._lang: str = "de"
         self._db: Database | None = None
+        self._runtime_profile: str = get_runtime_profile()
+        self._db_path: Path = get_runtime_db_path(self._runtime_profile)
         self._inpa_path: str = self._detect_inpa_path() or ""
         self._ecu_path: str = self._detect_ecu_path() or ""
         self._models_data: dict = {}
@@ -1959,9 +2013,8 @@ class MainWindow(QMainWindow):
         self._update_worker: UpdateCheckWorker | None = None
 
         if DB_AVAILABLE:
-            db_path = Path(__file__).resolve().parent / "data" / "database.db"
             try:
-                self._db = Database(str(db_path))
+                self._db = Database(str(self._db_path))
             except Exception:
                 self._db = None
 
@@ -2063,7 +2116,7 @@ class MainWindow(QMainWindow):
         optional_checks = [
             ("INPA folder", self._inpa_path),
             ("EDIABAS ECU folder", self._ecu_path),
-            ("Database file", str(Path(__file__).resolve().parent / "data" / "database.db")),
+            ("Database file", str(self._db_path)),
         ]
 
         lines: list[str] = []
@@ -2338,7 +2391,26 @@ class MainWindow(QMainWindow):
     def _start_update_check(self):
         if not self._db:
             return
-        local_version = self._db.get_setting("seeds_version", "0000-00-00")
+
+        local_version = (self._db.get_setting("seeds_version", "") or "").strip()
+
+        # Bootstrap DB setting from bundled seeds/version.txt on first run.
+        bundled_version = ""
+        try:
+            version_file = Path(__file__).resolve().parent / "seeds" / "version.txt"
+            if version_file.exists():
+                bundled_version = version_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+
+        if not local_version:
+            local_version = bundled_version or "0000-00-00"
+            if local_version:
+                try:
+                    self._db.set_setting("seeds_version", local_version)
+                except Exception:
+                    pass
+
         self._update_worker = UpdateCheckWorker(local_version)
         self._update_worker.update_available.connect(self._on_update_available)
         self._update_worker.start()
@@ -2386,7 +2458,8 @@ class MainWindow(QMainWindow):
 
                 with urllib.request.urlopen(UpdateCheckWorker.VERSION_URL, timeout=5) as resp:
                     remote_version = resp.read().decode("utf-8").strip()
-                self._db.set_setting("seeds_version", remote_version)
+                if remote_version:
+                    self._db.set_setting("seeds_version", remote_version)
                 self.update_bar.setVisible(False)
             except Exception:
                 pass
