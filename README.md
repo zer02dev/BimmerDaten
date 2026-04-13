@@ -176,14 +176,17 @@ When in doubt — don't code.
 ## Community Presets
 
 Have a useful coding preset? Share it with the community via 
-[GitHub Issues](../../issues) — attach an exported `.csv` file 
+[GitHub Discusions](../../discussions/3) — attach an exported `.csv` file 
 from DB Browser and describe what it does. 
 The best presets will be added to the official database.
 
 
-## Contributing
+## Contributing and Issues
 
-Bug reports and feature requests are welcome via [GitHub Issues](../../issues).  
+## Contributing and Issues
+
+Bug reports and feature requests are welcome via [GitHub Issues](../../issues).
+If you encounter any issue, please attach the log file from `%LOCALAPPDATA%\BimmerDaten\Logs\` to your report.
 Pull requests are not accepted at this time.
 
 ---

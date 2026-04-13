@@ -2949,11 +2949,14 @@ class CodingPanel(QWidget):
             except Exception:
                 first_line = ""
         if first_line:
+            current_model_index = self.model_combo.currentIndex()
             model_index = self.model_combo.findText(first_line, Qt.MatchFlag.MatchFixedString | Qt.MatchFlag.MatchCaseSensitive)
             if model_index < 0:
                 model_index = self.model_combo.findText(first_line, Qt.MatchFlag.MatchContains)
             if model_index >= 0:
                 self.model_combo.setCurrentIndex(model_index)
+                if model_index == current_model_index:
+                    self._on_model_changed(model_index)
             elif self.model_combo.currentIndex() < 0 and self.model_combo.count() > 0:
                 self.model_combo.setCurrentIndex(0)
         elif self.model_combo.currentIndex() < 0 and self.model_combo.count() > 0:
