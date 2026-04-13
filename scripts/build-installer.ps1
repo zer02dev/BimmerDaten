@@ -9,13 +9,29 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+if ($AppVersion -match "\s") {
+    throw "AppVersion cannot contain spaces. Example: -AppVersion alpha-1.0"
+}
+
 if ($Clean) {
     if (Test-Path "build") { Remove-Item "build" -Recurse -Force }
     if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
 }
 
+# Prevent common lock issue when app is running from dist/BimmerDaten.
+$distExe = Join-Path $root "dist\BimmerDaten\BimmerDaten.exe"
+if (Test-Path $distExe) {
+    $running = Get-Process -Name "BimmerDaten" -ErrorAction SilentlyContinue
+    if ($running) {
+        throw "BimmerDaten.exe is running and can lock dist files. Close the app and rerun the script."
+    }
+}
+
 Write-Host "[1/2] Building app with PyInstaller..."
-pyinstaller BimmerDaten.spec
+pyinstaller --noconfirm BimmerDaten.spec
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller failed with exit code $LASTEXITCODE"
+}
 
 if (-not $IsccPath) {
     $possible = @(
@@ -36,5 +52,8 @@ if (-not $IsccPath -or -not (Test-Path $IsccPath)) {
 
 Write-Host "[2/2] Building installer with Inno Setup..."
 & $IsccPath "/DMyAppVersion=$AppVersion" "installer\BimmerDaten.iss"
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup (ISCC) failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Done. Installer should be in installer\output\."
