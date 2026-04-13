@@ -56,4 +56,16 @@ if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup (ISCC) failed with exit code $LASTEXITCODE"
 }
 
+$setupExe = Join-Path $root "installer\output\BimmerDaten-Setup.exe"
+if (-not (Test-Path $setupExe)) {
+    throw "Installer output not found: $setupExe"
+}
+
+$hash = Get-FileHash -Algorithm SHA256 -Path $setupExe
+$hashFile = "$setupExe.sha256"
+"$($hash.Hash)  $(Split-Path -Leaf $setupExe)" | Set-Content -Path $hashFile -Encoding ascii
+
+Write-Host "SHA256: $($hash.Hash)"
+Write-Host "SHA256 file: $hashFile"
+
 Write-Host "Done. Installer should be in installer\output\."

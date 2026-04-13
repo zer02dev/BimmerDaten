@@ -58,6 +58,11 @@ ENV/
 .vscode/
 .idea/
 
+# Local secrets
+.env
+.env.local
+.env.*.local
+
 # OS files
 .DS_Store
 Thumbs.db
