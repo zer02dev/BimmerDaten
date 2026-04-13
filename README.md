@@ -183,10 +183,10 @@ The best presets will be added to the official database.
 
 ## Contributing and Issues
 
-## Contributing and Issues
-
 Bug reports and feature requests are welcome via [GitHub Issues](../../issues).
+
 If you encounter any issue, please attach the log file from `%LOCALAPPDATA%\BimmerDaten\Logs\` to your report.
+
 Pull requests are not accepted at this time.
 
 ---
