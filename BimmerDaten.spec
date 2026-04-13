@@ -16,7 +16,7 @@ translation_hidden = collect_submodules("deep_translator")
 hiddenimports = sorted(set(r_hidden + translation_hidden))
 
 datas = [
-    (str(project_dir / "data"), "data"),
+    (str(project_dir / "seeds"), "seeds"),
     (str(project_dir / "bimmerdatenlogo.ico"), "."),
 ] + r_datas
 

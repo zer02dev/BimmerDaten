@@ -10,6 +10,7 @@ Użycie:
 import sys
 import sqlite3
 import time
+import os
 from pathlib import Path
 
 try:
@@ -28,7 +29,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Konfiguracja
 
-DB_PATH = Path(__file__).parent / "data" / "database.db"
+LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
+DB_PATH = LOCAL_APPDATA / "BimmerDaten" / "database.db"
 DELAY_BETWEEN_REQUESTS = 0.5  # sekundy między requestami do Google
 
 

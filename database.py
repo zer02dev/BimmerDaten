@@ -902,7 +902,10 @@ class Database:
 
 
 if __name__ == "__main__":
-    default_db = Path(__file__).resolve().parent / "data" / "database.db"
+    import os
+
+    local_appdata = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
+    default_db = local_appdata / "BimmerDaten" / "database.db"
     db = Database(str(default_db))
 
     sample_prg = "ME9K_NG4"
