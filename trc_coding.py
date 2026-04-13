@@ -128,7 +128,7 @@ def _read_ncs_last_profile_name() -> str:
             value, _ = winreg.QueryValueEx(key, "LastProfile")
             return str(value or "").strip()
     except Exception:
-        logger.exception("Failed to read NCS LastProfile from registry")
+        logger.debug("NCS LastProfile registry key not found (NCS Expert not yet run or different install path)")
         return ""
 
 
