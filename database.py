@@ -154,11 +154,11 @@ class Database:
                 content_after   TEXT NOT NULL,
                 notes          TEXT NOT NULL DEFAULT '',
                 changed_options TEXT NOT NULL,
+                exported_at    TEXT DEFAULT (datetime('now')),
                 vin            TEXT,
                 teilenummer    TEXT,
                 production_date TEXT,
-                sa_codes       TEXT,
-                exported_at    TEXT DEFAULT (datetime('now'))
+                sa_codes       TEXT
             );
             """
         )
@@ -181,6 +181,71 @@ class Database:
             self.conn.execute("ALTER TABLE trc_history ADD COLUMN production_date TEXT")
         if "sa_codes" not in columns:
             self.conn.execute("ALTER TABLE trc_history ADD COLUMN sa_codes TEXT")
+
+        # Normalize legacy column order to keep all runtime DBs consistent.
+        self._normalize_trc_history_schema()
+
+    def _normalize_trc_history_schema(self) -> None:
+        expected_order = [
+            "id",
+            "model",
+            "module",
+            "module_file",
+            "content_before",
+            "content_after",
+            "notes",
+            "changed_options",
+            "exported_at",
+            "vin",
+            "teilenummer",
+            "production_date",
+            "sa_codes",
+        ]
+
+        rows = self.conn.execute("PRAGMA table_info(trc_history)").fetchall()
+        current_order = [row[1] for row in rows]
+
+        # If order already matches, no rebuild is needed.
+        if current_order == expected_order:
+            return
+
+        # Rebuild table with canonical order and copy all existing data.
+        self.conn.execute("ALTER TABLE trc_history RENAME TO trc_history_old")
+        self.conn.execute(
+            """
+            CREATE TABLE trc_history (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                model          TEXT NOT NULL,
+                module         TEXT NOT NULL,
+                module_file    TEXT NOT NULL,
+                content_before  TEXT NOT NULL,
+                content_after   TEXT NOT NULL,
+                notes          TEXT NOT NULL DEFAULT '',
+                changed_options TEXT NOT NULL,
+                exported_at    TEXT DEFAULT (datetime('now')),
+                vin            TEXT,
+                teilenummer    TEXT,
+                production_date TEXT,
+                sa_codes       TEXT
+            );
+            """
+        )
+        self.conn.execute(
+            """
+            INSERT INTO trc_history (
+                id, model, module, module_file,
+                content_before, content_after, notes, changed_options,
+                exported_at, vin, teilenummer, production_date, sa_codes
+            )
+            SELECT
+                id, model, module, module_file,
+                content_before, content_after, COALESCE(notes, ''), changed_options,
+                COALESCE(exported_at, datetime('now')),
+                vin, teilenummer, production_date, sa_codes
+            FROM trc_history_old
+            """
+        )
+        self.conn.execute("DROP TABLE trc_history_old")
 
     def _ensure_trc_favorites_schema(self) -> None:
         self.conn.execute(
