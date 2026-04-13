@@ -757,7 +757,7 @@ class Database:
     def update_from_github(self, progress_callback=None) -> dict:
         """
         Fetch seed CSVs from GitHub and import new rows via INSERT OR IGNORE.
-        Returns dict: {table_name: rows_processed} for each file.
+        Returns dict: {table_name: {added, existing, processed}} for each file.
         """
         import csv
         import io
@@ -771,7 +771,7 @@ class Database:
             "sa_translations.csv": "sa_translations",
         }
 
-        results: dict[str, int | str] = {}
+        results: dict[str, dict[str, int] | str] = {}
 
         for filename, table_name in seed_files.items():
             if progress_callback:
@@ -816,17 +816,28 @@ class Database:
             col_list = ", ".join(csv_cols)
             sql = f"INSERT OR IGNORE INTO {table_name} ({col_list}) VALUES ({placeholders})"
 
-            count = 0
+            added_count = 0
+            existing_count = 0
+            processed_count = 0
             for row in reader:
                 values = [row.get(col) for col in csv_cols]
                 try:
+                    before = self.conn.total_changes
                     self.conn.execute(sql, values)
-                    count += 1
+                    processed_count += 1
+                    if self.conn.total_changes > before:
+                        added_count += 1
+                    else:
+                        existing_count += 1
                 except Exception:
                     pass
 
             self.conn.commit()
-            results[table_name] = count
+            results[table_name] = {
+                "added": added_count,
+                "existing": existing_count,
+                "processed": processed_count,
+            }
 
         return results
 
@@ -835,7 +846,7 @@ class Database:
         Import a local CSV file into the specified table using INSERT OR IGNORE.
         CSV must have a header row with column names.
         Only columns present in both the CSV and the DB table are imported.
-        Returns number of rows processed.
+        Returns number of rows added.
         Raises exception on file or schema error.
         """
         import csv
@@ -866,17 +877,19 @@ class Database:
             col_list = ", ".join(csv_cols)
             sql = f"INSERT OR IGNORE INTO {table_name} ({col_list}) VALUES ({placeholders})"
 
-            count = 0
+            added_count = 0
             for row in reader:
                 values = [row.get(col) for col in csv_cols]
                 try:
+                    before = self.conn.total_changes
                     self.conn.execute(sql, values)
-                    count += 1
+                    if self.conn.total_changes > before:
+                        added_count += 1
                 except Exception:
                     pass
 
             self.conn.commit()
-            return count
+            return added_count
 
     def get_setting(self, key: str, default: str = "") -> str:
         with self._connect() as conn:

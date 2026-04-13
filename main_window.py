@@ -2466,8 +2466,12 @@ class MainWindow(QMainWindow):
 
         lines = []
         for table, result in results.items():
-            if isinstance(result, int):
-                lines.append(f"  {table}: {result} rows imported")
+            if isinstance(result, dict):
+                added = int(result.get("added", 0))
+                existing = int(result.get("existing", 0))
+                lines.append(f"  {table}: {added} rows added, {existing} already existed")
+            elif isinstance(result, int):
+                lines.append(f"  {table}: {result} rows added")
             else:
                 lines.append(f"  {table}: {result}")
 
