@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QProgressDialog, QInputDialog
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
-from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap
+from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap, QShowEvent
 
 from app_logger import get_log_file_path, get_logs_dir_path, setup_logger
 
@@ -106,6 +106,14 @@ def get_appdata_root(profile: str = "") -> Path:
 
 def get_runtime_db_path(profile: str = "") -> Path:
     return get_appdata_root(profile) / "database.db"
+
+
+def get_runtime_paths_config_path(profile: str = "") -> Path:
+    return get_appdata_root(profile) / "ncs_coding_paths.json"
+
+
+def get_legacy_paths_config_path() -> Path:
+    return Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
 
 
 
@@ -2020,6 +2028,7 @@ class MainWindow(QMainWindow):
         self._models_data: dict = {}
         self._models_loaded_for_path: str = ""
         self._models_parser_cls = None
+        self._startup_guard_ran = False
         self._sa_config = self._load_sa_config()
         self._update_worker: UpdateCheckWorker | None = None
 
@@ -2041,9 +2050,15 @@ class MainWindow(QMainWindow):
         self._setup_menu()
         self._start_update_check()
         self.setStyleSheet(WIN98_STYLE)
-        logger.info("MainWindow.__init__: scheduling startup guard")
-        QTimer.singleShot(0, self._run_startup_guard)
+        logger.info("MainWindow.__init__: startup guard will run after first showEvent")
         logger.info("MainWindow.__init__: done")
+
+    def showEvent(self, event: QShowEvent):
+        super().showEvent(event)
+        if self._startup_guard_ran:
+            return
+        self._startup_guard_ran = True
+        QTimer.singleShot(0, self._run_startup_guard)
 
     def _detect_inpa_path(self) -> str | None:
         for candidate in [
@@ -2065,17 +2080,16 @@ class MainWindow(QMainWindow):
         return None
 
     def _load_sa_config(self) -> dict:
-        config_path = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
         defaults = {
             "daten": r"C:\NCSEXPER\DATEN",
             "work": r"C:\NCSEXPER\WORK",
         }
 
-        if not config_path.exists():
+        payload = self._load_paths_config_payload()
+        if not payload:
             return defaults
 
         try:
-            payload = json.loads(config_path.read_text(encoding="utf-8"))
             daten_path = str(payload.get("daten_path") or defaults["daten"]).strip() or defaults["daten"]
             trc_path = str(payload.get("trc_path") or "").strip()
             work_path = str(Path(trc_path).parent) if trc_path else defaults["work"]
@@ -2084,8 +2098,37 @@ class MainWindow(QMainWindow):
                 "work": work_path,
             }
         except Exception:
-            logger.exception("Failed to load SA config from %s", config_path)
+            logger.exception("Failed to load SA config payload")
             return defaults
+
+    def _load_paths_config_payload(self) -> dict:
+        config_path = get_runtime_paths_config_path(self._runtime_profile)
+        legacy_path = get_legacy_paths_config_path()
+
+        if config_path.exists():
+            try:
+                return json.loads(config_path.read_text(encoding="utf-8"))
+            except Exception:
+                logger.exception("Failed to read startup path config from %s", config_path)
+                return {}
+
+        if not legacy_path.exists():
+            return {}
+
+        try:
+            payload = json.loads(legacy_path.read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("Failed to read legacy startup path config from %s", legacy_path)
+            return {}
+
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info("Migrated startup path config to %s", config_path)
+        except Exception:
+            logger.exception("Failed to migrate startup path config to %s", config_path)
+
+        return payload
 
     def _set_app_icon(self):
         icon_path = Path(__file__).resolve().parent / "bimmerdatenlogo.ico"
@@ -2094,7 +2137,6 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(icon)
 
     def _resolve_startup_paths(self) -> dict:
-        config_path = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
         defaults = {
             "daten_path": r"C:\NCSEXPER\DATEN",
             "trc_path": r"C:\NCSEXPER\WORK\FSW_PSW.TRC",
@@ -2102,13 +2144,8 @@ class MainWindow(QMainWindow):
             "work_path": r"C:\NCSEXPER\WORK",
         }
 
-        if not config_path.exists():
-            return defaults
-
-        try:
-            payload = json.loads(config_path.read_text(encoding="utf-8"))
-        except Exception:
-            logger.exception("Failed to read startup path config from %s", config_path)
+        payload = self._load_paths_config_payload()
+        if not payload:
             return defaults
 
         daten_path = str(payload.get("daten_path") or defaults["daten_path"]).strip() or defaults["daten_path"]
@@ -2126,13 +2163,99 @@ class MainWindow(QMainWindow):
             "work_path": work_path,
         }
 
-    def _build_startup_report(self) -> tuple[str, bool]:
-        paths = self._resolve_startup_paths()
+    def _save_startup_paths(self, paths: dict) -> None:
+        config_path = get_runtime_paths_config_path(self._runtime_profile)
+        payload: dict = self._load_paths_config_payload()
+
+        payload.update(
+            {
+                "daten_path": str(paths.get("daten_path") or "").strip(),
+                "trc_path": str(paths.get("trc_path") or "").strip(),
+                "translations_path": str(paths.get("translations_path") or "").strip(),
+            }
+        )
+
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            logger.exception("Failed to save startup path config: %s", config_path)
+
+    def _required_path_checks(self, paths: dict) -> list[tuple[str, str, str]]:
+        return [
+            ("DATEN folder", "daten_path", "dir"),
+            ("TRC file", "trc_path", "file"),
+            ("Translations.csv", "translations_path", "file"),
+            ("WORK folder", "work_path", "dir"),
+        ]
+
+    def _pick_missing_required_paths(self, paths: dict) -> tuple[dict, bool]:
+        updated = dict(paths)
+        changed = False
+
+        missing = []
+        for label, key, kind in self._required_path_checks(updated):
+            target = str(updated.get(key) or "").strip()
+            exists = bool(target) and Path(target).exists()
+            if not exists:
+                missing.append((label, key, kind))
+
+        if not missing:
+            return updated, False
+
+        ask = QMessageBox(self)
+        ask.setWindowTitle("Startup Guard")
+        ask.setIcon(QMessageBox.Icon.Warning)
+        ask.setText("Some required paths are missing.")
+        ask.setInformativeText("Do you want to locate the missing paths now?")
+        ask.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if ask.exec() != int(QMessageBox.StandardButton.Yes):
+            return updated, False
+
+        base_start = str(Path.home())
+        for label, key, kind in missing:
+            current_value = str(updated.get(key) or "").strip()
+            start_dir = current_value or base_start
+
+            if kind == "dir":
+                selected = QFileDialog.getExistingDirectory(
+                    self,
+                    f"Startup Guard - choose {label}",
+                    start_dir,
+                )
+            else:
+                if "Translations.csv" in label:
+                    filter_text = "CSV Files (*.csv);;All Files (*)"
+                else:
+                    filter_text = "TRC Files (*.trc *.TRC);;All Files (*)"
+                selected, _ = QFileDialog.getOpenFileName(
+                    self,
+                    f"Startup Guard - choose {label}",
+                    start_dir,
+                    filter_text,
+                )
+
+            if selected:
+                updated[key] = selected
+                changed = True
+
+        if changed:
+            trc_path = str(updated.get("trc_path") or "").strip()
+            if trc_path:
+                updated["work_path"] = str(Path(trc_path).parent)
+            self._save_startup_paths(updated)
+
+        return updated, changed
+
+    def _build_startup_report(self, paths: dict | None = None) -> tuple[str, bool]:
+        resolved_paths = paths or self._resolve_startup_paths()
         required_checks = [
-            ("DATEN folder", paths["daten_path"]),
-            ("TRC file", paths["trc_path"]),
-            ("Translations.csv", paths["translations_path"]),
-            ("WORK folder", paths["work_path"]),
+            ("DATEN folder", resolved_paths["daten_path"]),
+            ("TRC file", resolved_paths["trc_path"]),
+            ("Translations.csv", resolved_paths["translations_path"]),
+            ("WORK folder", resolved_paths["work_path"]),
         ]
         optional_checks = [
             ("INPA folder", self._inpa_path),
@@ -2172,8 +2295,8 @@ class MainWindow(QMainWindow):
         report_text = "\n".join(lines)
         return report_text, bool(missing_required)
 
-    def _show_startup_report(self, force_show: bool = False):
-        report_text, has_missing_required = self._build_startup_report()
+    def _show_startup_report(self, force_show: bool = False, paths: dict | None = None):
+        report_text, has_missing_required = self._build_startup_report(paths)
 
         if not force_show and not has_missing_required:
             return
@@ -2192,10 +2315,23 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _run_startup_guard(self):
-        _report_text, has_missing_required = self._build_startup_report()
+        paths = self._resolve_startup_paths()
+        _report_text, has_missing_required = self._build_startup_report(paths)
         if has_missing_required:
             self.status_bar.showMessage("Startup Guard: some required files/paths are missing (details in the report).")
-            self._show_startup_report(force_show=True)
+            self._show_startup_report(force_show=True, paths=paths)
+
+            updated_paths, changed = self._pick_missing_required_paths(paths)
+            if changed:
+                _report_text, has_missing_required = self._build_startup_report(updated_paths)
+                if has_missing_required:
+                    self.status_bar.showMessage("Startup Guard: some required files/paths are still missing.")
+                    self._show_startup_report(force_show=True, paths=updated_paths)
+                else:
+                    self.status_bar.showMessage("Startup Guard: required files/paths OK.")
+                return
+
+            self.status_bar.showMessage("Startup Guard: missing paths were not updated.")
             return
 
         self.status_bar.showMessage("Startup Guard: required files/paths OK.")

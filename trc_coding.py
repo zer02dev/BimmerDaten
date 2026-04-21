@@ -69,7 +69,24 @@ DEFAULT_DATEN_PATH = Path(r"C:\NCSEXPER\DATEN")
 DEFAULT_TRANSLATIONS_PATH = Path(r"C:\NCS Dummy\Translations.csv")
 DEFAULT_MAND_PATH = Path(r"C:\NCSEXPER\WORK\FSW_PSW.MAN")
 DEFAULT_WORK_PATH = Path(r"C:\NCSEXPER\WORK")
-CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
+LEGACY_CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ncs_coding_paths.json"
+
+
+def _normalize_profile_name(raw_value: str) -> str:
+    profile = (raw_value or "").strip().lower()
+    if not profile or profile in {"prod", "production", "default", "release"}:
+        return ""
+    if profile in {"dev", "development"}:
+        return "Dev"
+    return ""
+
+
+def _get_config_path() -> Path:
+    appdata = os.environ.get("LOCALAPPDATA")
+    base = Path(appdata) if appdata else (Path.home() / "AppData" / "Local")
+    profile = _normalize_profile_name(os.environ.get("BIMMERDATEN_PROFILE", ""))
+    suffix = f"-{profile}" if profile else ""
+    return base / f"BimmerDaten{suffix}" / "ncs_coding_paths.json"
 
 
 def play_sound(sound_type: str = "success") -> None:
@@ -455,18 +472,37 @@ def compare_trc_contents(content_a: str, content_b: str) -> list[tuple[str, str,
 
 
 def _read_json_config() -> dict:
-    if not CONFIG_PATH.exists():
+    config_path = _get_config_path()
+    if config_path.exists():
+        try:
+            return json.loads(config_path.read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("Failed to read coding paths config: %s", config_path)
+            return {}
+
+    if not LEGACY_CONFIG_PATH.exists():
         return {}
+
     try:
-        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        payload = json.loads(LEGACY_CONFIG_PATH.read_text(encoding="utf-8"))
     except Exception:
-        logger.exception("Failed to read coding paths config: %s", CONFIG_PATH)
+        logger.exception("Failed to read legacy coding paths config: %s", LEGACY_CONFIG_PATH)
         return {}
+
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info("Migrated coding paths config to %s", config_path)
+    except Exception:
+        logger.exception("Failed to migrate coding paths config to %s", config_path)
+
+    return payload
 
 
 def _write_json_config(data: dict) -> None:
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    config_path = _get_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _candidate_path(default_path: Path, config_value: str | None) -> Path:
