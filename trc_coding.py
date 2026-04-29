@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QProgressBar,
+    QToolButton,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -2339,6 +2340,7 @@ class CodingPanel(QWidget):
         self._favorites_only = False
         self._favorite_options: set[str] = set()
         self._column_min_widths: dict[int, int] = {}
+        self._sidebar_hidden = False
         self._ncs_profile_status: dict = {
             "found": False,
             "profile_name": "",
@@ -2356,10 +2358,17 @@ class CodingPanel(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        left_box = QWidget()
-        left_box.setMinimumWidth(250)
-        left_box.setMaximumWidth(300)
-        left_layout = QVBoxLayout(left_box)
+        self.sidebar_handle = QToolButton()
+        self.sidebar_handle.setAutoRaise(True)
+        self.sidebar_handle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.sidebar_handle.setFixedWidth(24)
+        self.sidebar_handle.clicked.connect(self._toggle_left_sidebar)
+        layout.addWidget(self.sidebar_handle)
+
+        self.left_box = QWidget()
+        self.left_box.setMinimumWidth(250)
+        self.left_box.setMaximumWidth(300)
+        left_layout = QVBoxLayout(self.left_box)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(4)
 
@@ -2397,10 +2406,21 @@ class CodingPanel(QWidget):
         self.detect_progress.setFormat("Searching for module...")
         left_layout.addWidget(self.detect_progress)
 
-        self.load_trc_button = QPushButton("📂 Load TRC")
-        self.load_trc_button.clicked.connect(self.load_selected_trc)
-        self.load_trc_button.setEnabled(True)
-        left_layout.addWidget(self.load_trc_button)
+        load_row = QHBoxLayout()
+        load_row.setContentsMargins(0, 0, 0, 0)
+        load_row.setSpacing(4)
+
+        self.auto_load_trc_button = QPushButton("📂 Auto load TRC")
+        self.auto_load_trc_button.clicked.connect(self.load_selected_trc)
+        self.auto_load_trc_button.setEnabled(True)
+        load_row.addWidget(self.auto_load_trc_button, 1)
+
+        self.load_any_trc_button = QPushButton("📁 Load any TRC")
+        self.load_any_trc_button.clicked.connect(self.load_any_trc)
+        self.load_any_trc_button.setEnabled(True)
+        load_row.addWidget(self.load_any_trc_button, 1)
+
+        left_layout.addLayout(load_row)
 
         self._presets_panel = PresetsPanel(coding_panel=self, db=self._db)
         left_layout.addWidget(self._presets_panel)
@@ -2523,8 +2543,22 @@ class CodingPanel(QWidget):
         splitter.setSizes([520, 90])
         right_layout.addWidget(splitter, 1)
 
-        layout.addWidget(left_box)
+        layout.addWidget(self.left_box)
         layout.addWidget(right_box, 1)
+        self._update_sidebar_handle_icon()
+
+    def _toggle_left_sidebar(self):
+        self._sidebar_hidden = not self._sidebar_hidden
+        self.left_box.setVisible(not self._sidebar_hidden)
+        self._update_sidebar_handle_icon()
+
+    def _update_sidebar_handle_icon(self):
+        if self._sidebar_hidden:
+            self.sidebar_handle.setArrowType(Qt.ArrowType.RightArrow)
+            self.sidebar_handle.setToolTip("Show left pane")
+        else:
+            self.sidebar_handle.setArrowType(Qt.ArrowType.LeftArrow)
+            self.sidebar_handle.setToolTip("Hide left pane")
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2728,7 +2762,8 @@ class CodingPanel(QWidget):
         self._trc_loaded = False
         self.model_combo.setEnabled(False)
         self.module_combo.setEnabled(False)
-        self.load_trc_button.setEnabled(True)
+        self.auto_load_trc_button.setEnabled(True)
+        self.load_any_trc_button.setEnabled(True)
         self.detect_module_button.setEnabled(False)
         if hasattr(self, "_presets_panel"):
             self._presets_panel.refresh(self._current_model, self._current_module)
@@ -2761,7 +2796,8 @@ class CodingPanel(QWidget):
             self.context_label.setText("No chassis folders with .Cxx files were found in DATEN")
             self._module_options = set()
             self._render_table()
-            self.load_trc_button.setEnabled(False)
+            self.auto_load_trc_button.setEnabled(False)
+            self.load_any_trc_button.setEnabled(False)
             if hasattr(self, "_presets_panel"):
                 self._presets_panel.refresh(self._current_model, self._current_module)
             return
@@ -2798,12 +2834,13 @@ class CodingPanel(QWidget):
         self.module_combo.blockSignals(False)
 
         self.module_combo.setCurrentIndex(0)
-        self.load_trc_button.setEnabled(True)
+        self.auto_load_trc_button.setEnabled(True)
+        self.load_any_trc_button.setEnabled(True)
         self.detect_module_button.setEnabled(self._trc_loaded)
         if self._trc_loaded:
             self.context_label.setText("TRC loaded. Choose a module or use detection to match the options.")
         else:
-            self.context_label.setText(f"Model: {model_name} | Step 2: click '📂 Load TRC'")
+            self.context_label.setText(f"Model: {model_name} | Step 2: click '📂 Auto load TRC' or '📁 Load any TRC'")
 
     def _on_module_changed(self, index: int):
         if index < 0 or not self._current_model:
@@ -2884,7 +2921,8 @@ class CodingPanel(QWidget):
             return
 
         self.detect_module_button.setEnabled(False)
-        self.load_trc_button.setEnabled(False)
+        self.auto_load_trc_button.setEnabled(False)
+        self.load_any_trc_button.setEnabled(False)
         self.detect_progress.setVisible(True)
         self.context_label.setText("Searching for module...")
         QApplication.processEvents()
@@ -2932,7 +2970,8 @@ class CodingPanel(QWidget):
     def _stop_detect_ui(self):
         self.detect_progress.setVisible(False)
         self.detect_module_button.setEnabled(True)
-        self.load_trc_button.setEnabled(True)
+        self.auto_load_trc_button.setEnabled(True)
+        self.load_any_trc_button.setEnabled(True)
 
     def _cleanup_detect_worker(self):
         if self._detect_worker:
@@ -2944,6 +2983,18 @@ class CodingPanel(QWidget):
 
     def load_selected_trc(self):
         self.load_trc_from_path(Path(self._paths.trc_path))
+
+    def load_any_trc(self):
+        start_dir = str(Path(self._paths.trc_path).parent) if self._paths.trc_path else str(Path.home())
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load any TRC",
+            start_dir,
+            "TRC files (*.trc *.TRC);;All files (*)",
+        )
+        if not file_path:
+            return
+        self.load_trc_from_path(Path(file_path))
 
     def reload_current_trc(self):
         self._refresh_warning_state()

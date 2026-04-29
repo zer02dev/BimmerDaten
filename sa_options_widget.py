@@ -84,10 +84,17 @@ class SAOptionsWidget(QWidget):
         self._workers: list[SATranslationWorker] = []
         self._translation_pending: set[tuple[str, str]] = set()
         self._current_options: list[dict] = []
+        self._auto_load_attempted = False
 
         self._setup_ui()
         self._load_models()
         self._populate_table()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._auto_load_attempted:
+            return
+        self._auto_load_attempted = True
         self._auto_load_fa_trc()
 
     def _setup_ui(self):
@@ -110,8 +117,8 @@ class SAOptionsWidget(QWidget):
         self.fa_trc_status_label.setStyleSheet("color: #888;")
         top.addWidget(self.fa_trc_status_label)
 
-        self.load_btn = QPushButton("📂")
-        self.load_btn.setMaximumWidth(40)
+        self.load_btn = QPushButton("Load any file (FA)")
+        self.load_btn.setMinimumWidth(150)
         self.load_btn.setToolTip("Manually select fa.trc file")
         self.load_btn.clicked.connect(self._load_fa_trc)
         top.addWidget(self.load_btn)
