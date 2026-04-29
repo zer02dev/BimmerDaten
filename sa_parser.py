@@ -50,8 +50,8 @@ def find_at_file(chassis: str, daten_folder: str) -> Path | None:
 
 def list_available_chassis(daten_folder: str) -> list[str]:
     """
-    Build dynamic chassis list by scanning DATEN root and direct subfolders
-    for files matching *AT.000 and extracting chassis name from filename.
+    Build dynamic chassis list by scanning DATEN recursively for files
+    matching *AT.000 and extracting chassis name from filename.
     """
     daten = Path(daten_folder)
     if not daten.exists():
@@ -68,18 +68,12 @@ def list_available_chassis(daten_folder: str) -> list[str]:
         return chassis_name or None
 
     try:
-        for path in daten.iterdir():
-            if path.is_file():
-                chassis_name = _extract_chassis(path.name)
-                if chassis_name:
-                    found.add(chassis_name)
-            elif path.is_dir():
-                for subfile in path.iterdir():
-                    if not subfile.is_file():
-                        continue
-                    chassis_name = _extract_chassis(subfile.name)
-                    if chassis_name:
-                        found.add(chassis_name)
+        for path in daten.rglob("*AT.000"):
+            if not path.is_file():
+                continue
+            chassis_name = _extract_chassis(path.name)
+            if chassis_name:
+                found.add(chassis_name)
     except Exception:
         logger.exception("Failed while listing available chassis in %s", daten_folder)
         return sorted(found)
