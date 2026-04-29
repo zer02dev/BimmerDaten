@@ -1,1 +1,2 @@
 id,name,description,model,module,changes,created_at,updated_at
+1,Auto-lock,X3 Autolock,E83,GM5,"[{""option"": ""VERRIEGELUNGSSCHWELLE"", ""value"": ""24_km/h""}, {""option"": ""VERRIEGELN_XKM/H_SENDER_1"", ""value"": ""aktiv""}, {""option"": ""VERRIEGELN_XKM/H_SENDER_2"", ""value"": ""aktiv""}, {""option"": ""VERRIEGELN_XKM/H_SENDER_3"", ""value"": ""aktiv""}, {""option"": ""VERRIEGELN_XKM/H_SENDER_4"", ""value"": ""aktiv""}]",2026-04-23 16:51:29,2026-04-23 16:51:29
