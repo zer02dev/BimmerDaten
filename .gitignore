@@ -76,3 +76,5 @@ installer/output/
 test.py
 
 docs
+
+build.sh
