@@ -2336,6 +2336,7 @@ class CodingPanel(QWidget):
         self._trc_loaded = False
         self._detect_thread: QThread | None = None
         self._detect_worker: ModuleDetectWorker | None = None
+        self._last_loaded_trc: str | None = None
         self._filter_text = ""
         self._favorites_only = False
         self._favorite_options: set[str] = set()
@@ -2498,6 +2499,11 @@ class CodingPanel(QWidget):
         self.context_label = QLabel("Select a model, then load the TRC")
         self.context_label.setWordWrap(True)
         table_layout.addWidget(self.context_label)
+
+        # Label showing the currently loaded TRC file (path)
+        self.loaded_trc_label = QLabel("")
+        self.loaded_trc_label.setWordWrap(False)
+        table_layout.addWidget(self.loaded_trc_label)
 
         self.trc_table = QTableWidget()
         self.trc_table.setColumnCount(7)
@@ -2913,7 +2919,11 @@ class CodingPanel(QWidget):
         if self._detect_thread and self._detect_thread.isRunning():
             return
 
-        trc_path = Path(self._paths.trc_path)
+        # Prefer last loaded TRC (from "Load any TRC"); fall back to configured default
+        if getattr(self, "_last_loaded_trc", None) and Path(self._last_loaded_trc).exists():
+            trc_path = Path(self._last_loaded_trc)
+        else:
+            trc_path = Path(self._paths.trc_path)
         trc_map = parse_trc_file(str(trc_path))
         if not trc_map:
             QMessageBox.information(self, "Detection", "Failed to read options from FSW_PSW.TRC.")
@@ -2998,7 +3008,11 @@ class CodingPanel(QWidget):
 
     def reload_current_trc(self):
         self._refresh_warning_state()
-        self.load_trc_from_path(Path(self._paths.trc_path))
+        # Reload the last loaded TRC if present, otherwise load configured default
+        if getattr(self, "_last_loaded_trc", None) and Path(self._last_loaded_trc).exists():
+            self.load_trc_from_path(Path(self._last_loaded_trc))
+        else:
+            self.load_trc_from_path(Path(self._paths.trc_path))
 
     def load_trc_from_path(self, trc_path: Path):
         if not trc_path.exists():
@@ -3016,7 +3030,17 @@ class CodingPanel(QWidget):
             self.context_label.setText(f"File not found: {trc_path}")
             if hasattr(self, "_presets_panel"):
                 self._presets_panel.refresh(self._current_model, self._current_module)
+            try:
+                if hasattr(self, "loaded_trc_label"):
+                    self.loaded_trc_label.setText("")
+            except Exception:
+                logger.exception("Failed to clear loaded_trc_label")
             return
+        # Remember the currently loaded TRC path so detection reads the correct file
+        try:
+            self._paths.trc_path = str(trc_path)
+        except Exception:
+            logger.exception("Failed to update paths.trc_path to %s", trc_path)
 
         content = read_text_file(trc_path)
         self._current_trc_content = content
@@ -3026,6 +3050,17 @@ class CodingPanel(QWidget):
         self._trc_loaded = True
         self.model_combo.setEnabled(True)
         self.module_combo.setEnabled(True)
+
+        # Remember the path of the TRC actually loaded (chosen by user), but do not overwrite configured default
+        try:
+            self._last_loaded_trc = str(trc_path)
+        except Exception:
+            logger.exception("Failed to set _last_loaded_trc to %s", trc_path)
+        try:
+            if hasattr(self, "loaded_trc_label"):
+                self.loaded_trc_label.setText(str(trc_path))
+        except Exception:
+            logger.exception("Failed to set loaded_trc_label to %s", trc_path)
 
         # Auto-detect model from ASW.TRC (first line = model name)
         asw_path = Path(r"C:\NCSEXPER\WORK\ASW.TRC")
