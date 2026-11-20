@@ -8,6 +8,7 @@ chapter of the WinKFPT online help, plus findings from real installations.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -114,6 +115,33 @@ ERROR_TIPS: dict[int, ErrorTip] = {
     ),
 }
 
+# EDIABAS interface handler errors (IFH-xxxx) that appear inside COAPI 2000 messages.
+IFH_TIPS: dict[str, ErrorTip] = {
+    "0018": ErrorTip(
+        "Interface could not be initialised (IFH-0018)",
+        "EDIABAS could not open the diagnostic interface (e.g. STD:OBD): no cable connected, cable driver / "
+        "COM port not set up, or another program is using the interface. Nothing was sent to the ECU.",
+        "Connect the cable to the PC and the car (ignition on), check the COM port of the K+DCAN cable "
+        "(usually COM1, latency 1 ms) and close INPA / Tool32 / NCS Expert. Test the connection in INPA first.",
+    ),
+    "0009": ErrorTip(
+        "No response from the ECU (IFH-0009)",
+        "The interface works, but the ECU does not answer: ignition off, wrong ECU address, or the ECU is not "
+        "on this bus.",
+        "Switch the ignition on, check the ECU address (integration position) and the battery voltage.",
+    ),
+    "0003": ErrorTip(
+        "Data transmission to the interface disturbed (IFH-0003)",
+        "Unstable connection between PC and cable.",
+        "Use a short USB cable, set the COM port latency to 1 ms, connect a battery charger.",
+    ),
+    "0010": ErrorTip(
+        "Data transmission to the ECU disturbed (IFH-0010)",
+        "Unstable connection between cable and ECU.",
+        "Check the OBD plug and battery voltage; connect a battery charger during flashing.",
+    ),
+}
+
 # Interpreted errors (FciConfig.csv) start at 900000.
 INTERPRETED_TIP = ErrorTip(
     "Interpreted error (summary)",
@@ -139,6 +167,16 @@ def tip_for(entry: LogEntry) -> ErrorTip | None:
             f"{entry.message_arg or 'a flash job'} fails. Nothing was sent to the ECU.",
             "In Expert mode select a flash PABD (🔧 in the 🗂 SGDAT tab) for this ECU. "
             "If there is none, the flash data for this ECU is not installed.",
+        )
+    ifh = re.search(r"IFH-(\d{4})", entry.message)
+    if ifh:
+        tip = IFH_TIPS.get(ifh.group(1))
+        if tip is not None:
+            return tip
+        return ErrorTip(
+            f"Interface error (IFH-{ifh.group(1)})",
+            "EDIABAS could not talk to the diagnostic interface or the ECU.",
+            "Check the cable, interface driver / COM port, ignition and battery voltage; test with Tool32 or INPA.",
         )
     if entry.code >= 900000:
         return INTERPRETED_TIP

@@ -9,7 +9,7 @@ import logging
 from collections.abc import Callable
 from html import escape as html_escape
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_assistant import AssistantResult, Candidate, FlashAssistant, expert_values
+from winkfp_presets import ExpertPreset
 from winkfp_families import HeaderCache, enrich_with_headers, load_family_records
 from winkfp_parser import WinkfpPaths
 from winkfp_widgets import (
@@ -56,6 +57,7 @@ Comfort mode <i>Update ZUSB</i> (F3) does.</p>
 
 
 class AssistantTab(QWidget):
+    savePresetRequested = pyqtSignal(object)  # ExpertPreset
     def __init__(self, paths_provider: Callable[[], WinkfpPaths], parent=None):
         super().__init__(parent)
         self._paths_provider = paths_provider
@@ -119,7 +121,14 @@ class AssistantTab(QWidget):
         self.copy_btn = QPushButton("📋 Copy Expert-mode values")
         self.copy_btn.setEnabled(False)
         self.copy_btn.clicked.connect(self._copy_values)
-        right_layout.addWidget(self.copy_btn)
+        self.preset_btn = QPushButton("💾 Save as preset")
+        self.preset_btn.setToolTip("Save these values as a WinKFP Expert-mode preset (💾 Presets tab)")
+        self.preset_btn.setEnabled(False)
+        self.preset_btn.clicked.connect(self._save_preset)
+        buttons_row = QHBoxLayout()
+        buttons_row.addWidget(self.copy_btn)
+        buttons_row.addWidget(self.preset_btn)
+        right_layout.addLayout(buttons_row)
         splitter.addWidget(right)
         splitter.setSizes([760, 480])
         layout.addWidget(splitter, 1)
@@ -275,6 +284,8 @@ class AssistantTab(QWidget):
         html.append(
             f"<p style='color:{COLOR_MUTED};'>Program file = new software, data file = calibration. "
             "Usually program first, then data — WinKFP Comfort mode does both automatically.</p>"
+            f"<p style='color:{COLOR_MUTED};'>Expert mode lists program / data files only from DATA\\DEVELOP — "
+            "<b>💾 Save as preset</b> → <b>Load into WinKFP</b> copies them there and fills in the configuration.</p>"
         )
         html.append(
             "<h4>Comfort mode</h4>"
@@ -283,8 +294,24 @@ class AssistantTab(QWidget):
         )
         self.result_view.setHtml(html_page("".join(html)))
         self._values_text = values.as_text()
+        self._values = values
+        self._candidate = cand
         self.copy_btn.setText("📋 Copy Expert-mode values")
         self.copy_btn.setEnabled(True)
+        self.preset_btn.setEnabled(True)
+
+    def _save_preset(self):
+        values = getattr(self, "_values", None)
+        cand = getattr(self, "_candidate", None)
+        if values is None or cand is None:
+            return
+        description = cand.row.description
+        name = f"{values.family} {values.zb_nr}" + (f" — {description[:40]}" if description else "")
+        self.savePresetRequested.emit(ExpertPreset(
+            name=name, family=values.family, zb_nr=values.zb_nr, pabd=values.pabd, psgbd=values.psgbd,
+            address=values.address, program_file=values.program_file, data_file=values.data_file,
+            notes=description,
+        ))
 
     def _copy_values(self):
         text = getattr(self, "_values_text", "")

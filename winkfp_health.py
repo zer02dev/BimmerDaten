@@ -245,7 +245,7 @@ def list_backups(root: Path | None = None) -> list[BackupRecord]:
             files=payload.get("files", []),
             restored=bool(payload.get("restored", False)),
         ))
-    return sorted(records, key=lambda r: r.created, reverse=True)
+    return sorted(records, key=lambda r: (r.created, r.path.name), reverse=True)
 
 
 def is_winkfp_running() -> bool:
@@ -301,6 +301,13 @@ def apply_fixes(fixes: list[Fix], paths: WinkfpPaths, backup_root: Path | None =
                 entry["sha_before"] = _sha256(target)
             else:
                 entry["action"] = "created"
+                # Remember folders that do not exist yet, so an undo removes only those.
+                missing_dirs: list[str] = []
+                folder = target.parent
+                while not folder.exists() and folder != folder.parent:
+                    missing_dirs.append(str(folder))
+                    folder = folder.parent
+                entry["created_dirs"] = missing_dirs
             backed_up[target] = entry
     record.files = list(backed_up.values())
     record.save()
@@ -312,6 +319,8 @@ def apply_fixes(fixes: list[Fix], paths: WinkfpPaths, backup_root: Path | None =
             shutil.copytree(fix.source, fix.destination)
         elif isinstance(fix, KfconfPabdFix):
             _apply_kfconf_fix(fix)
+        elif callable(getattr(fix, "apply", None)):
+            fix.apply()
         else:
             raise TypeError(f"Unknown fix type: {type(fix).__name__}")
         logger.info("Applied WinKFP fix: %s", fix.description)
@@ -344,20 +353,16 @@ def restore_backup(record: BackupRecord, force: bool = False) -> list[str]:
             if target.exists():
                 target.unlink()
                 messages.append(f"Removed: {target}")
-    # Remove folders that were created by the fix and are empty now.
-    nfs_root = Path(record.nfs_root) if record.nfs_root else None
+    # Remove only folders that the fix itself created (and that are empty now).
     created_dirs = sorted(
-        {Path(e["path"]).parent for e in record.files if e.get("action") == "created"},
+        {Path(d) for e in record.files if e.get("action") == "created" for d in e.get("created_dirs", [])},
         key=lambda p: len(p.parts), reverse=True,
     )
     for folder in created_dirs:
-        current = folder
-        while nfs_root is not None and current != nfs_root and nfs_root in current.parents:
-            try:
-                current.rmdir()
-            except OSError:
-                break
-            current = current.parent
+        try:
+            folder.rmdir()
+        except OSError:
+            pass
     record.restored = True
     record.save()
     return messages

@@ -27,6 +27,7 @@ from winkfp_assistant_tab import AssistantTab
 from winkfp_families_tab import FamiliesTab
 from winkfp_health_tab import HealthTab
 from winkfp_logs_tab import LogsTab
+from winkfp_presets_tab import PresetsTab
 from winkfp_sgdat_tab import SgdatTab
 from winkfp_updates_tab import UpdatesTab
 from winkfp_widgets import WINKFP_STYLE
@@ -44,6 +45,7 @@ SGDAT_TAB_TITLE = "🗂 SGDAT"
 LOGS_TAB_TITLE = "🧾 Logs"
 FAMILIES_TAB_TITLE = "📦 Families"
 ASSISTANT_TAB_TITLE = "🔎 What to flash"
+PRESETS_TAB_TITLE = "💾 Presets"
 
 # Sub-tabs planned for the next stages: (title, stage, description).
 PLANNED_TABS = [
@@ -52,7 +54,7 @@ PLANNED_TABS = [
     (ASSISTANT_TAB_TITLE, "E6", "Assistant: HW number / ZB → family → ZB history → HW compatibility → files for Expert mode."),
     (SGDAT_TAB_TITLE, "E3", "All *.ipo files classified as flash (PABD) or coding (CABD), with job list and author."),
     (LOGS_TAB_TITLE, "E4", "WinKFP error logs with explained error codes, IDENT / AIF / REF results."),
-    ("💾 Presets", "E7", "Named Expert-mode presets loaded into WINKFPT.INI."),
+    (PRESETS_TAB_TITLE, "E7", "Named Expert-mode presets loaded into WINKFPT.INI."),
 ]
 
 
@@ -82,6 +84,10 @@ class WinkfpPanel(QWidget):
         # Changes made by BimmerDaten itself should not be reported as an update later.
         if not self._pending_changes:
             self.updates_tab.save_baseline("after BimmerDaten fix")
+
+    def _on_save_preset_requested(self, preset):
+        self.presets_tab.add_preset(preset)
+        self.sub_tabs.setCurrentWidget(self.presets_tab)
 
     def _on_families_restored(self):
         self._on_files_changed_by_fix()
@@ -120,6 +126,9 @@ class WinkfpPanel(QWidget):
         self.families_tab.openPrgRequested.connect(self.openPrgRequested.emit)
         self.families_tab.filesChanged.connect(self._on_families_restored)
         self.assistant_tab = AssistantTab(self._current_paths)
+        self.presets_tab = PresetsTab(self._current_paths)
+        self.presets_tab.filesChanged.connect(self._on_files_changed_by_fix)
+        self.assistant_tab.savePresetRequested.connect(self._on_save_preset_requested)
 
         for title, stage, description in PLANNED_TABS[1:]:
             if title == SGDAT_TAB_TITLE:
@@ -133,6 +142,9 @@ class WinkfpPanel(QWidget):
                 continue
             if title == ASSISTANT_TAB_TITLE:
                 self.sub_tabs.addTab(self.assistant_tab, title)
+                continue
+            if title == PRESETS_TAB_TITLE:
+                self.sub_tabs.addTab(self.presets_tab, title)
                 continue
             page = QWidget()
             page_layout = QVBoxLayout(page)

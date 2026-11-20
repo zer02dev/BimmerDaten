@@ -708,7 +708,9 @@ def ipo_version(file_name: str) -> int:
 # Logs and error texts
 
 _LOG_LINE_RE = re.compile(r"^\[(?P<time>[\d:.]+)\]\s+\[(?P<date>[\d-]+)\]\s+\[(?P<app>[^\]]*)\]\s?(?P<rest>.*)$")
-_LOG_HEAD_RE = re.compile(r"^\s*(?P<code>\d+)\s+(?P<category>\S+)\s+(?P<source>\S+)\s+(?P<function>\S+)\s+(?P<line>\d+)\s*$")
+_LOG_HEAD_RE = re.compile(
+    r"^\s*(?P<code>\d+)\s+(?P<category>\S+)\s+(?P<source>\S+(?:\s+\([^)]*\))?)\s+(?P<function>\S+)\s+(?P<line>\d+)\s*$"
+)
 
 
 @dataclass
