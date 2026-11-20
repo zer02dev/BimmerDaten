@@ -14,7 +14,7 @@ from html import escape as html_escape
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_errors import LogEvent, collapse_repeated, group_events, tip_for
+from winkfp_widgets import html_page, style_table
 from winkfp_parser import (
     WinkfpPaths,
     find_error_logs,
@@ -117,6 +118,7 @@ class LogsTab(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         self.table = QTableWidget(0, len(EVENT_COLUMNS))
+        style_table(self.table)
         self.table.setHorizontalHeaderLabels(EVENT_COLUMNS)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -145,9 +147,7 @@ class LogsTab(QWidget):
         results_split.addWidget(self.out_list)
         self.out_text = QPlainTextEdit()
         self.out_text.setReadOnly(True)
-        mono = QFont("Consolas")
-        mono.setStyleHint(QFont.StyleHint.Monospace)
-        self.out_text.setFont(mono)
+        self.out_text.setObjectName("mono")
         results_split.addWidget(self.out_text)
         results_split.setSizes([320, 800])
         results_layout.addWidget(results_split)
@@ -206,7 +206,7 @@ class LogsTab(QWidget):
         except Exception as exc:
             logger.exception("Failed to parse WinKFP log %s", path)
             self._events = []
-            self.summary_label.setText(f"<span style='color:#b00020;'>Cannot read log: {html_escape(str(exc))}</span>")
+            self.summary_label.setText(f"<span style='color:#a8001c;'>Cannot read log: {html_escape(str(exc))}</span>")
         self._populate_events()
 
     # --- error events --------------------------------------------------------
@@ -235,7 +235,7 @@ class LogsTab(QWidget):
             for col, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 if col == EVENT_COLUMNS.index("Explanation") and tip:
-                    item.setForeground(QColor("#1f5f9e"))
+                    item.setForeground(QColor("#0f4c8a"))
                 self.table.setItem(row, col, item)
         self.table.resizeColumnsToContents()
         msg_col = EVENT_COLUMNS.index("Message")
@@ -266,14 +266,14 @@ class LogsTab(QWidget):
         tip = event.tip
         if tip is not None:
             html.append(
-                f"<h3 style='color:#1f5f9e;'>💡 {html_escape(tip.title)}</h3>"
+                f"<h3 style='color:#0f4c8a;'>💡 {html_escape(tip.title)}</h3>"
                 f"<p><b>Cause:</b> {html_escape(tip.cause)}</p>"
                 f"<p><b>What to do:</b> {html_escape(tip.fix)}</p>"
             )
         when = _fmt_time(event.timestamp)
         if event.count > 1:
             when += f" (×{event.count}, last {_fmt_time(event.last_timestamp)})"
-        html.append(f"<p style='color:#666;'>{html_escape(when)}</p>")
+        html.append(f"<p style='color:#3f3f3f;'>{html_escape(when)}</p>")
         html.append("<table cellspacing='0' cellpadding='3' border='1' style='border-collapse:collapse;'>")
         html.append("<tr><th>Code</th><th>Category</th><th>Source</th><th>Function</th><th>Message</th><th>Code text</th></tr>")
         for entry in event.entries:
@@ -288,7 +288,7 @@ class LogsTab(QWidget):
                 "</tr>"
             )
         html.append("</table>")
-        self.details.setHtml("".join(html))
+        self.details.setHtml(html_page("".join(html)))
 
     # --- result files --------------------------------------------------------
 

@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_parser import WinkfpPaths
-from winkfp_widgets import Worker
+from winkfp_widgets import Worker, html_page, style_tree
 from winkfp_snapshot import (
     SECTION_DATA,
     SECTION_TITLES,
@@ -87,6 +87,7 @@ class UpdatesTab(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         self.tree = QTreeWidget()
+        style_tree(self.tree)
         self.tree.setHeaderLabels(["Change", "Count"])
         self.tree.setAlternatingRowColors(True)
         header = self.tree.header()
@@ -214,7 +215,7 @@ class UpdatesTab(QWidget):
         self.baseline_btn.setEnabled(True)
 
     def _on_failed(self, message: str):
-        self.status_label.setText(f"<span style='color:#b00020;'>Failed: {html_escape(message)}</span>")
+        self.status_label.setText(f"<span style='color:#a8001c;'>Failed: {html_escape(message)}</span>")
 
     # --- result display --------------------------------------------------------
 
@@ -255,13 +256,13 @@ class UpdatesTab(QWidget):
     def _show_result(self, result: ComparisonResult):
         self.tree.clear()
         families = result.families
-        self._add_group("Families removed from DATA", families.removed, "#b00020")
-        self._add_group("Families added to DATA", families.added, "#2a8f2a")
+        self._add_group("Families removed from DATA", families.removed, "#a8001c")
+        self._add_group("Families added to DATA", families.added, "#176b1d")
         self._add_group(
             "Families with changed files",
-            [f"{fam} ({count} file(s))" for fam, count in families.changed.items()], "#b36b00",
+            [f"{fam} ({count} file(s))" for fam, count in families.changed.items()], "#8a4b00",
         )
-        self._add_group("New update backup folders", result.new_backups, "#1f5f9e")
+        self._add_group("New update backup folders", result.new_backups, "#0f4c8a")
         for section, diff in result.sections.items():
             title = SECTION_TITLES.get(section, section)
             self._add_group(f"{title}: files added", diff.added)
@@ -275,7 +276,7 @@ class UpdatesTab(QWidget):
             )
         else:
             self.status_label.setText(
-                f"<span style='color:#2a8f2a;'><b>No changes</b></span> between "
+                f"<span style='color:#176b1d;'><b>No changes</b></span> between "
                 f"<i>{html_escape(result.old_title)}</i> and <i>{html_escape(result.new_title)}</i>."
             )
 
@@ -298,4 +299,4 @@ class UpdatesTab(QWidget):
                 "When everything is fine, click <b>📸 Save current state as baseline</b> so the next "
                 "update is compared against this state."
             )
-        self.notes.setHtml("<br><br>".join(notes))
+        self.notes.setHtml(html_page("<br><br>".join(notes)))

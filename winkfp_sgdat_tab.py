@@ -44,16 +44,16 @@ from winkfp_parser import (
     list_files_ci,
     load_kfconf,
 )
-from winkfp_widgets import Worker
+from winkfp_widgets import Worker, html_page, style_table
 
 logger = logging.getLogger("bimmerdaten.winkfp_sgdat_tab")
 
 KIND_LABELS = {
-    IPO_KIND_PABD: ("🔧 Flash (PABD)", "#1f5f9e"),
-    IPO_KIND_CABD: ("✏️ Coding (CABD)", "#8a5a00"),
-    IPO_KIND_SWT: ("🔑 Activation codes (SWT/FSC)", "#6a3d9a"),
+    IPO_KIND_PABD: ("🔧 Flash (PABD)", "#0f4c8a"),
+    IPO_KIND_CABD: ("✏️ Coding (CABD)", "#7a4a00"),
+    IPO_KIND_SWT: ("🔑 Activation codes (SWT/FSC)", "#5b2d8c"),
 }
-UNKNOWN_LABEL = ("❓ Unknown", "#777777")
+UNKNOWN_LABEL = ("❓ Unknown", "#4a4a4a")
 
 KIND_DESCRIPTIONS = {
     IPO_KIND_PABD: (
@@ -63,7 +63,7 @@ KIND_DESCRIPTIONS = {
     IPO_KIND_CABD: (
         "<b>Coding sequence description (CABD)</b> — used by NCS Expert for coding "
         "(A_*.ipo files; A_EWSSYN synchronises the EWS immobiliser with the engine ECU). "
-        "<span style='color:#b00020;'><b>Do not select it as PABD in WinKFP</b></span>: it has no flash jobs "
+        "<span style='color:#a8001c;'><b>Do not select it as PABD in WinKFP</b></span>: it has no flash jobs "
         "and WinKFP stops with COAPI error 1063 (CABD parameter error, e.g. SET_ECU_ADDRESS)."
     ),
     IPO_KIND_SWT: (
@@ -183,6 +183,7 @@ class SgdatTab(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.table = QTableWidget(0, len(COLUMNS))
+        style_table(self.table)
         self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -239,7 +240,7 @@ class SgdatTab(QWidget):
             data_item = _SortItem("✅" if row.data_installed else "", 0 if row.data_installed else 1)
             if row.newer:
                 name_item.setToolTip(f"Newer version available: {row.newer}")
-                name_item.setForeground(QColor("#888888"))
+                name_item.setForeground(QColor("#4a4a4a"))
             stamp = row.modified.strftime("%Y-%m-%d") if row.modified else ""
             items = [
                 name_item,
@@ -313,7 +314,7 @@ class SgdatTab(QWidget):
         ]
         if row.newer:
             html.append(
-                f"<p style='color:#b36b00;'>⚠️ A newer version of this PABD is available: "
+                f"<p style='color:#8a4b00;'>⚠️ A newer version of this PABD is available: "
                 f"<b>{html_escape(row.newer)}</b></p>"
             )
         meta = [
@@ -338,13 +339,13 @@ class SgdatTab(QWidget):
                     f"P-SGBD <a href='prg:{html_escape(entry.psgbd)}'>{html_escape(entry.psgbd)}</a>"
                     f"{' · data installed' if row.data_installed else ''}</li>"
                 )
-            html.append("</ul><p style='color:#666;'>Click a P-SGBD to open it in the Diagnosis tab.</p>")
+            html.append("</ul><p style='color:#3f3f3f;'>Click a P-SGBD to open it in the Diagnosis tab.</p>")
         elif info.kind == IPO_KIND_PABD:
-            html.append("<p style='color:#666;'>Not referenced in KFCONF — usable in Expert mode only.</p>")
+            html.append("<p style='color:#3f3f3f;'>Not referenced in KFCONF — usable in Expert mode only.</p>")
 
         if info.jobs:
             html.append("<h4>Jobs</h4><p>" + ", ".join(html_escape(j) for j in info.jobs) + "</p>")
-        self.details.setHtml("".join(html))
+        self.details.setHtml(html_page("".join(html)))
 
     def _on_anchor(self, url: QUrl):
         target = url.toString()
@@ -354,6 +355,6 @@ class SgdatTab(QWidget):
         ecu_dir = self._paths_provider().ecu_dir
         match = list_files_ci(ecu_dir).get(name.lower())
         if match is None:
-            self.details.append(f"<p style='color:#b00020;'>{html_escape(name)} not found in {html_escape(str(ecu_dir))}</p>")
+            self.details.append(f"<p style='color:#a8001c;'>{html_escape(name)} not found in {html_escape(str(ecu_dir))}</p>")
             return
         self.openPrgRequested.emit(str(match))

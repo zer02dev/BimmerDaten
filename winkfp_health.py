@@ -88,6 +88,37 @@ class CopyFileFix(Fix):
 
 
 @dataclass
+class CopyFolderFix(Fix):
+    """Copy a whole folder (e.g. an ECU family from a backup) to a destination that does not exist yet."""
+
+    source: Path = Path()
+    destination: Path = Path()
+
+    def _source_files(self) -> list[Path]:
+        if not self.source.is_dir():
+            return []
+        return sorted(p for p in self.source.rglob("*") if p.is_file())
+
+    def target_files(self) -> list[Path]:
+        return [self.destination / p.relative_to(self.source) for p in self._source_files()]
+
+    def preview(self) -> str:
+        files = self._source_files()
+        size_mb = sum(p.stat().st_size for p in files) / (1024 * 1024)
+        return (
+            f"Copy folder {self.source.name} ({len(files)} files, {size_mb:.1f} MB)\n"
+            f"  from {self.source.parent}\n  to   {self.destination.parent}"
+        )
+
+    def validate(self) -> str | None:
+        if not self.source.is_dir():
+            return f"Source folder not found: {self.source}"
+        if self.destination.exists():
+            return f"Destination already exists: {self.destination}"
+        return None
+
+
+@dataclass
 class KfconfPabdFix(Fix):
     kfconf_path: Path = Path()
     line_no: int = 0
@@ -277,6 +308,8 @@ def apply_fixes(fixes: list[Fix], paths: WinkfpPaths, backup_root: Path | None =
     for fix in fixes:
         if isinstance(fix, CopyFileFix):
             shutil.copy2(fix.source, fix.destination)
+        elif isinstance(fix, CopyFolderFix):
+            shutil.copytree(fix.source, fix.destination)
         elif isinstance(fix, KfconfPabdFix):
             _apply_kfconf_fix(fix)
         else:
@@ -311,6 +344,20 @@ def restore_backup(record: BackupRecord, force: bool = False) -> list[str]:
             if target.exists():
                 target.unlink()
                 messages.append(f"Removed: {target}")
+    # Remove folders that were created by the fix and are empty now.
+    nfs_root = Path(record.nfs_root) if record.nfs_root else None
+    created_dirs = sorted(
+        {Path(e["path"]).parent for e in record.files if e.get("action") == "created"},
+        key=lambda p: len(p.parts), reverse=True,
+    )
+    for folder in created_dirs:
+        current = folder
+        while nfs_root is not None and current != nfs_root and nfs_root in current.parents:
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
     record.restored = True
     record.save()
     return messages

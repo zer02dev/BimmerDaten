@@ -23,10 +23,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from winkfp_families_tab import FamiliesTab
 from winkfp_health_tab import HealthTab
 from winkfp_logs_tab import LogsTab
 from winkfp_sgdat_tab import SgdatTab
 from winkfp_updates_tab import UpdatesTab
+from winkfp_widgets import WINKFP_STYLE
 from winkfp_parser import (
     InstallSummary,
     WinkfpPaths,
@@ -39,11 +41,12 @@ logger = logging.getLogger("bimmerdaten.winkfp_panel")
 
 SGDAT_TAB_TITLE = "🗂 SGDAT"
 LOGS_TAB_TITLE = "🧾 Logs"
+FAMILIES_TAB_TITLE = "📦 Families"
 
 # Sub-tabs planned for the next stages: (title, stage, description).
 PLANNED_TABS = [
     ("🩺 Health", "E1", "Installation check with fixes and backup."),
-    ("📦 Families", "E5", "ECU families with completeness status, integration positions, ZB table, restore from backups."),
+    (FAMILIES_TAB_TITLE, "E5", "ECU families with completeness status, integration positions, ZB table, restore from backups."),
     ("🔎 What to flash", "E6", "Assistant: HW number / ZB → family → ZB history → HW compatibility → files for Expert mode."),
     (SGDAT_TAB_TITLE, "E3", "All *.ipo files classified as flash (PABD) or coding (CABD), with job list and author."),
     (LOGS_TAB_TITLE, "E4", "WinKFP error logs with explained error codes, IDENT / AIF / REF results."),
@@ -78,9 +81,15 @@ class WinkfpPanel(QWidget):
         if not self._pending_changes:
             self.updates_tab.save_baseline("after BimmerDaten fix")
 
+    def _on_families_restored(self):
+        self._on_files_changed_by_fix()
+        self.health_tab.run_check()
+
     # --- UI -----------------------------------------------------------------
 
     def _build_ui(self):
+        # Common readable look for all WinKFP sub-tabs (overrides the app-wide Win98 fonts).
+        self.setStyleSheet(WINKFP_STYLE)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -103,6 +112,9 @@ class WinkfpPanel(QWidget):
         self.sgdat_tab = SgdatTab(self._current_paths)
         self.sgdat_tab.openPrgRequested.connect(self.openPrgRequested.emit)
         self.logs_tab = LogsTab(self._current_paths)
+        self.families_tab = FamiliesTab(self._current_paths)
+        self.families_tab.openPrgRequested.connect(self.openPrgRequested.emit)
+        self.families_tab.filesChanged.connect(self._on_families_restored)
 
         for title, stage, description in PLANNED_TABS[1:]:
             if title == SGDAT_TAB_TITLE:
@@ -110,6 +122,9 @@ class WinkfpPanel(QWidget):
                 continue
             if title == LOGS_TAB_TITLE:
                 self.sub_tabs.addTab(self.logs_tab, title)
+                continue
+            if title == FAMILIES_TAB_TITLE:
+                self.sub_tabs.addTab(self.families_tab, title)
                 continue
             page = QWidget()
             page_layout = QVBoxLayout(page)
@@ -119,7 +134,7 @@ class WinkfpPanel(QWidget):
             )
             text.setAlignment(Qt.AlignmentFlag.AlignCenter)
             text.setWordWrap(True)
-            text.setStyleSheet("color: #666;")
+            text.setStyleSheet("color: #3f3f3f;")
             page_layout.addWidget(text)
             self.sub_tabs.addTab(page, title)
 
@@ -215,7 +230,7 @@ class WinkfpPanel(QWidget):
             for label in labels.values():
                 label.setText("-")
             labels["status"].setText(
-                f"<span style='color:#b00020;'>WinKFP not found in {self._paths.nfs_root}</span>"
+                f"<span style='color:#a8001c;'>WinKFP not found in {self._paths.nfs_root}</span>"
             )
             self._summary = None
             return
@@ -224,12 +239,12 @@ class WinkfpPanel(QWidget):
             summary = build_install_summary(self._paths)
         except Exception as exc:
             logger.exception("Failed to read WinKFP installation")
-            labels["status"].setText(f"<span style='color:#b00020;'>Read error: {exc}</span>")
+            labels["status"].setText(f"<span style='color:#a8001c;'>Read error: {exc}</span>")
             return
         self._summary = summary
         info = summary.info
 
-        labels["status"].setText("<span style='color:#2a8f2a;'>WinKFP installation found</span>")
+        labels["status"].setText("<span style='color:#176b1d;'>WinKFP installation found</span>")
         labels["version"].setText(
             " / ".join(v or "?" for v in (info.nfs_version, info.winkfp_version, info.kmm_version))
             if info.version_line else "unknown"
@@ -241,7 +256,7 @@ class WinkfpPanel(QWidget):
             labels["info"].setText(f"{summary.info_file} ({summary.info_entries} entries)")
         else:
             labels["info"].setText(
-                f"<span style='color:#b00020;'>{expected_info} missing — Comfort mode cannot list "
+                f"<span style='color:#a8001c;'>{expected_info} missing — Comfort mode cannot list "
                 f"integration positions (COAPI error 1020)</span>"
             )
         labels["families"].setText(str(summary.families))

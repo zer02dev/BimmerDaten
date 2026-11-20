@@ -43,14 +43,15 @@ from winkfp_health import (
     run_health_check,
 )
 from winkfp_parser import WinkfpPaths
+from winkfp_widgets import html_page, style_tree
 
 logger = logging.getLogger("bimmerdaten.winkfp_health_tab")
 
 SEVERITY_STYLE = {
-    SEVERITY_ERROR: ("❌", "Error", "#b00020"),
-    SEVERITY_WARNING: ("⚠️", "Warning", "#b36b00"),
-    SEVERITY_INFO: ("ℹ️", "Info", "#1f5f9e"),
-    SEVERITY_OK: ("✅", "OK", "#2a8f2a"),
+    SEVERITY_ERROR: ("❌", "Error", "#a8001c"),
+    SEVERITY_WARNING: ("⚠️", "Warning", "#8a4b00"),
+    SEVERITY_INFO: ("ℹ️", "Info", "#0f4c8a"),
+    SEVERITY_OK: ("✅", "OK", "#176b1d"),
 }
 
 ISSUE_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -67,6 +68,7 @@ class RestoreDialog(QDialog):
         layout.addWidget(QLabel(f"Backups made by BimmerDaten ({get_backup_root()}):"))
 
         self.tree = QTreeWidget()
+        style_tree(self.tree)
         self.tree.setHeaderLabels(["Created", "Changes", "Files", "Status"])
         self.tree.setRootIsDecorated(False)
         for record in backups:
@@ -151,6 +153,7 @@ class HealthTab(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         self.tree = QTreeWidget()
+        style_tree(self.tree)
         self.tree.setHeaderLabels(["Issue", "Category", "Fix"])
         self.tree.setRootIsDecorated(False)
         self.tree.setAlternatingRowColors(True)
@@ -193,7 +196,7 @@ class HealthTab(QWidget):
             report = run_health_check(paths)
         except Exception as exc:
             logger.exception("WinKFP health check failed")
-            self.summary_label.setText(f"<span style='color:#b00020;'>Check failed: {html_escape(str(exc))}</span>")
+            self.summary_label.setText(f"<span style='color:#a8001c;'>Check failed: {html_escape(str(exc))}</span>")
             return
         finally:
             QApplication.restoreOverrideCursor()
@@ -218,17 +221,17 @@ class HealthTab(QWidget):
         warnings = report.count(SEVERITY_WARNING)
         fixable = len(report.fixable)
         if errors == 0 and warnings == 0:
-            text = "<span style='color:#2a8f2a;'><b>No problems found.</b></span>"
+            text = "<span style='color:#176b1d;'><b>No problems found.</b></span>"
         else:
-            error_color = "#b00020" if errors else "#2a8f2a"
-            warning_color = "#b36b00" if warnings else "#2a8f2a"
+            error_color = "#a8001c" if errors else "#176b1d"
+            warning_color = "#8a4b00" if warnings else "#176b1d"
             text = (
                 f"<b><span style='color:{error_color};'>{errors} error(s)</span>, "
                 f"<span style='color:{warning_color};'>{warnings} warning(s)</span></b>"
             )
             if fixable:
                 text += f" — {fixable} can be fixed automatically"
-        text += f" <span style='color:#888;'>(checked {report.checked_at:%H:%M:%S})</span>"
+        text += f" <span style='color:#4a4a4a;'>(checked {report.checked_at:%H:%M:%S})</span>"
         self.summary_label.setText(text)
         if self.tree.topLevelItemCount():
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
@@ -251,7 +254,7 @@ class HealthTab(QWidget):
         ]
         if issue.fix is not None:
             html.append("<p><b>Automatic fix:</b></p><pre>" + html_escape(issue.fix.preview()) + "</pre>")
-        self.details.setHtml("".join(html))
+        self.details.setHtml(html_page("".join(html)))
 
     # --- fixes -----------------------------------------------------------------
 
