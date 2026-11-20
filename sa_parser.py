@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 
@@ -166,7 +167,8 @@ def parse_fa_trc(fa_path: str) -> list[str]:
 
     sa_codes: list[str] = []
     for part in content.split("$")[1:]:
-        code = part.split("$")[0].split("&")[0].split("*")[0].strip().upper()
+        # A code ends at the next FA marker, e.g. "$879-BFDY" -> "879".
+        code = re.split(r"[$&*%#+\-]", part, maxsplit=1)[0].strip().upper()
         if code:
             sa_codes.append(code)
 

@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -24,6 +25,8 @@ from PyQt6.QtWidgets import (
 from database import Database
 from sa_parser import list_available_chassis, parse_at_file, parse_fa_trc
 from trc_coding import parse_sysdaten
+from vin_decoder import read_fa_file
+from vin_decoder_tab import VinDecoderTab
 
 
 logger = logging.getLogger("bimmerdaten.sa_options_widget")
@@ -111,7 +114,14 @@ class SAOptionsWidget(QWidget):
         self._auto_load_fa_trc()
 
     def _setup_ui(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.sub_tabs = QTabWidget()
+        outer.addWidget(self.sub_tabs)
+
+        sa_page = QWidget()
+        root = QVBoxLayout(sa_page)
         root.setContentsMargins(6, 6, 6, 6)
         root.setSpacing(6)
 
@@ -178,6 +188,29 @@ class SAOptionsWidget(QWidget):
         self.status_label = QLabel("Total: 0 options")
         root.addWidget(self.status_label)
 
+        self.sub_tabs.addTab(sa_page, "📋 SA codes")
+        self.vin_tab = VinDecoderTab(self.daten_folder, self._sa_names_for)
+        self.vin_tab.showSaCodesRequested.connect(self._show_vehicle_sa_codes)
+        self.sub_tabs.addTab(self.vin_tab, "🔎 VIN decoder")
+
+    def _sa_names_for(self, chassis: str) -> dict[str, str]:
+        """SA code -> description (English if already translated, else German)."""
+        names: dict[str, str] = {}
+        for opt in parse_at_file(chassis, self.daten_folder):
+            code = str(opt.get("sa_code") or "").strip().upper()
+            if not code:
+                continue
+            text = ""
+            if self.db:
+                text = self.db.get_sa_translation(chassis, code, "en") or ""
+            names[code] = text or str(opt.get("desc_de") or "")
+        return names
+
+    def _show_vehicle_sa_codes(self):
+        self.sub_tabs.setCurrentIndex(0)
+        if self.only_vehicle_btn.isEnabled():
+            self.only_vehicle_btn.setChecked(True)
+
     def _load_models(self):
         self.model_combo.blockSignals(True)
         self.model_combo.clear()
@@ -226,6 +259,7 @@ class SAOptionsWidget(QWidget):
         sysdaten = parse_sysdaten(work_dir)
         vin = str(sysdaten.get("FAHRGESTELL_NR", "") or "").strip() or "—"
         self.vin_label.setText(f"VIN: {vin}")
+        self.vin_tab.set_vehicle(vin, read_fa_file(path))
 
         self.fa_trc_status_label.setText("✅ File fa.trc loaded")
         self.fa_trc_status_label.setStyleSheet("color: #2a8f2a;")
