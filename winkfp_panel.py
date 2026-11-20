@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from winkfp_assistant_tab import AssistantTab
 from winkfp_families_tab import FamiliesTab
 from winkfp_health_tab import HealthTab
 from winkfp_logs_tab import LogsTab
@@ -42,12 +43,13 @@ logger = logging.getLogger("bimmerdaten.winkfp_panel")
 SGDAT_TAB_TITLE = "🗂 SGDAT"
 LOGS_TAB_TITLE = "🧾 Logs"
 FAMILIES_TAB_TITLE = "📦 Families"
+ASSISTANT_TAB_TITLE = "🔎 What to flash"
 
 # Sub-tabs planned for the next stages: (title, stage, description).
 PLANNED_TABS = [
     ("🩺 Health", "E1", "Installation check with fixes and backup."),
     (FAMILIES_TAB_TITLE, "E5", "ECU families with completeness status, integration positions, ZB table, restore from backups."),
-    ("🔎 What to flash", "E6", "Assistant: HW number / ZB → family → ZB history → HW compatibility → files for Expert mode."),
+    (ASSISTANT_TAB_TITLE, "E6", "Assistant: HW number / ZB → family → ZB history → HW compatibility → files for Expert mode."),
     (SGDAT_TAB_TITLE, "E3", "All *.ipo files classified as flash (PABD) or coding (CABD), with job list and author."),
     (LOGS_TAB_TITLE, "E4", "WinKFP error logs with explained error codes, IDENT / AIF / REF results."),
     ("💾 Presets", "E7", "Named Expert-mode presets loaded into WINKFPT.INI."),
@@ -84,6 +86,8 @@ class WinkfpPanel(QWidget):
     def _on_families_restored(self):
         self._on_files_changed_by_fix()
         self.health_tab.run_check()
+        if self.assistant_tab._loaded:
+            self.assistant_tab.reload()
 
     # --- UI -----------------------------------------------------------------
 
@@ -115,6 +119,7 @@ class WinkfpPanel(QWidget):
         self.families_tab = FamiliesTab(self._current_paths)
         self.families_tab.openPrgRequested.connect(self.openPrgRequested.emit)
         self.families_tab.filesChanged.connect(self._on_families_restored)
+        self.assistant_tab = AssistantTab(self._current_paths)
 
         for title, stage, description in PLANNED_TABS[1:]:
             if title == SGDAT_TAB_TITLE:
@@ -125,6 +130,9 @@ class WinkfpPanel(QWidget):
                 continue
             if title == FAMILIES_TAB_TITLE:
                 self.sub_tabs.addTab(self.families_tab, title)
+                continue
+            if title == ASSISTANT_TAB_TITLE:
+                self.sub_tabs.addTab(self.assistant_tab, title)
                 continue
             page = QWidget()
             page_layout = QVBoxLayout(page)
