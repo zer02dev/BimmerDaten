@@ -50,6 +50,13 @@ except Exception:
     SA_OPTIONS_AVAILABLE = False
 
 try:
+    from winkfp_panel import WinkfpPanel
+    WINKFP_AVAILABLE = True
+except Exception:
+    logging.getLogger("bimmerdaten.main_window").exception("Failed to import WinKFP panel")
+    WINKFP_AVAILABLE = False
+
+try:
     import winsound
 except Exception:
     winsound = None
@@ -2495,6 +2502,16 @@ class MainWindow(QMainWindow):
             sa_layout.addWidget(QLabel("Failed to load the SA Options tab."))
 
         self.top_tabs.addTab(self.sa_options_panel, "🔧 SA Options")
+
+        if WINKFP_AVAILABLE:
+            self.winkfp_panel = WinkfpPanel(self)
+            self.winkfp_panel.openPrgRequested.connect(self._open_file_direct)
+        else:
+            self.winkfp_panel = QWidget()
+            winkfp_layout = QVBoxLayout(self.winkfp_panel)
+            winkfp_layout.addWidget(QLabel("Failed to load the WinKFP tab."))
+
+        self.top_tabs.addTab(self.winkfp_panel, "⚡ WinKFP")
 
         if not self._inpa_path:
             self.models_panel.set_placeholder("INPA installation not found")
