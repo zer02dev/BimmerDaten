@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal, QSettings
+from PyQt6.QtCore import QObject, QPoint, QRect, QSize, QThread, Qt, pyqtSignal, QSettings
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
@@ -45,6 +45,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QHeaderView,
+    QLayout,
+    QSizePolicy,
 )
 
 from database import Database
@@ -53,6 +55,68 @@ from trc_translator import TrcTranslator
 
 
 logger = logging.getLogger("bimmerdaten.trc_coding")
+
+
+class FlowLayout(QLayout):
+    """Layout that places widgets in rows and wraps to the next row when needed."""
+
+    def __init__(self, parent=None, spacing: int = 6):
+        super().__init__(parent)
+        self._items = []
+        self._spacing = spacing
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, index):
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index):
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        margins = self.contentsMargins()
+        return size + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+
+    def _do_layout(self, rect, test_only: bool) -> int:
+        margins = self.contentsMargins()
+        area = rect.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom())
+        x, y, line_height = area.x(), area.y(), 0
+        for item in self._items:
+            hint = item.sizeHint()
+            next_x = x + hint.width() + self._spacing
+            if next_x - self._spacing > area.right() + 1 and line_height > 0:
+                x = area.x()
+                y += line_height + self._spacing
+                next_x = x + hint.width() + self._spacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), hint))
+            x = next_x
+            line_height = max(line_height, hint.height())
+        return y + line_height - rect.y() + margins.bottom()
 
 try:
     import winreg
@@ -2367,8 +2431,8 @@ class CodingPanel(QWidget):
         layout.addWidget(self.sidebar_handle)
 
         self.left_box = QWidget()
-        self.left_box.setMinimumWidth(250)
-        self.left_box.setMaximumWidth(300)
+        self.left_box.setMinimumWidth(270)
+        self.left_box.setMaximumWidth(330)
         left_layout = QVBoxLayout(self.left_box)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(4)
@@ -2442,18 +2506,18 @@ class CodingPanel(QWidget):
         right_layout.setSpacing(4)
 
         self.profile_status_frame = QFrame()
+        self.profile_status_frame.setObjectName("profileStatusFrame")
         self.profile_status_frame.setFrameShape(QFrame.Shape.Panel)
         self.profile_status_frame.setFrameShadow(QFrame.Shadow.Raised)
-        self.profile_status_frame.setStyleSheet("background-color: #FF8C00; color: #000000; border: 1px solid #808080;")
+        self.profile_status_frame.setStyleSheet("QFrame#profileStatusFrame { background-color: #FF8C00; color: #000000; border: 1px solid #808080; }")
         profile_status_layout = QHBoxLayout(self.profile_status_frame)
         profile_status_layout.setContentsMargins(6, 4, 6, 4)
         profile_status_layout.setSpacing(8)
 
         self.profile_status_label = QWidget()
-        self.profile_status_label_layout = QHBoxLayout(self.profile_status_label)
+        # Profile chips wrap to a new row instead of being squeezed and cut off.
+        self.profile_status_label_layout = FlowLayout(self.profile_status_label, spacing=6)
         self.profile_status_label_layout.setContentsMargins(0, 0, 0, 0)
-        self.profile_status_label_layout.setSpacing(6)
-        self.profile_status_label_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.profile_status_label.setStyleSheet("background: transparent;")
         profile_status_layout.addWidget(self.profile_status_label, 1)
 
@@ -2588,7 +2652,7 @@ class CodingPanel(QWidget):
                 widget.deleteLater()
 
         if not found:
-            self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
+            self.profile_status_frame.setStyleSheet("QFrame#profileStatusFrame { background-color: #D9D9D9; color: #000000; border: 1px solid #808080; }")
             no_profiles_label = QLabel("No .PFL profiles in the folder")
             no_profiles_label.setStyleSheet("color: #606060; font-weight: bold; background: transparent;")
             no_profiles_label.setWordWrap(False)
@@ -2609,7 +2673,8 @@ class CodingPanel(QWidget):
                 "color: #FFFFFF;"
                 "border: 1px solid #808080;"
                 "border-radius: 3px;"
-                "padding: 1px 8px;"
+                "padding: 2px 8px;"
+                "min-width: 0px;"
                 "font-weight: bold;"
                 "text-align: center;"
                 "}"
@@ -2617,6 +2682,7 @@ class CodingPanel(QWidget):
                 f"background-color: {'#228B22' if can_write else '#A00000'};"
                 "}"
             )
+            chip.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             chip.setFlat(False)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
             chip.setToolTip(f"{profile.get('profile_path', '')}\nClick to show details")
@@ -2626,7 +2692,7 @@ class CodingPanel(QWidget):
             self.profile_status_label_layout.addWidget(chip)
 
         if not chip_widgets:
-            self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
+            self.profile_status_frame.setStyleSheet("QFrame#profileStatusFrame { background-color: #D9D9D9; color: #000000; border: 1px solid #808080; }")
             fallback_label = QLabel("No .PFL profiles in the folder")
             fallback_label.setStyleSheet("color: #606060; font-weight: bold; background: transparent;")
             fallback_label.setWordWrap(False)
@@ -2634,10 +2700,10 @@ class CodingPanel(QWidget):
             self.profile_status_frame.setFixedHeight(fallback_label.sizeHint().height() + 10)
             return
 
-        self.profile_status_label_layout.addStretch(1)
-        self.profile_status_frame.setStyleSheet("background-color: #D9D9D9; color: #000000; border: 1px solid #808080;")
-        tallest_chip = max(chip.sizeHint().height() for chip in chip_widgets)
-        self.profile_status_frame.setFixedHeight(tallest_chip + 10)
+        self.profile_status_frame.setStyleSheet("QFrame#profileStatusFrame { background-color: #D9D9D9; color: #000000; border: 1px solid #808080; }")
+        # Height follows the number of chip rows (FlowLayout).
+        self.profile_status_frame.setMinimumHeight(0)
+        self.profile_status_frame.setMaximumHeight(16777215)
 
     def _show_profile_info(self, profile: dict):
         profile_name = str(profile.get("profile_name") or "").strip() or "NONE"

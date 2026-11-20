@@ -43,7 +43,7 @@ from winkfp_families import (
 )
 from winkfp_health import CopyFolderFix, apply_fixes, get_backup_root, is_winkfp_running
 from winkfp_parser import WinkfpPaths, list_files_ci
-from winkfp_widgets import Worker, html_page, style_table
+from winkfp_widgets import LoadingOverlay, Worker, html_page, style_table
 
 logger = logging.getLogger("bimmerdaten.winkfp_families_tab")
 
@@ -109,6 +109,7 @@ class FamiliesTab(QWidget):
         self._worker: Worker | None = None
         self._loaded = False
         self._build_ui()
+        self._overlay = LoadingOverlay(self)
 
     # --- UI ------------------------------------------------------------------
 
@@ -188,7 +189,12 @@ class FamiliesTab(QWidget):
         worker.finishedWithResult.connect(self._on_loaded)
         worker.failed.connect(lambda msg: self.count_label.setText(f"Failed: {msg}"))
         worker.finished.connect(lambda: self.reload_btn.setEnabled(True))
+        worker.finished.connect(self._overlay.stop)
         self._worker = worker
+        self._overlay.start(
+            "Loading ECU families…\n"
+            "The first time all flash file headers are read — this takes a few seconds."
+        )
         worker.start()
 
     def _on_loaded(self, result):
@@ -423,8 +429,10 @@ class FamiliesTab(QWidget):
         worker = Worker(lambda: apply_fixes(fixes, paths), self)
         worker.finishedWithResult.connect(lambda record: self._on_restored(record, records))
         worker.failed.connect(self._on_restore_failed)
+        worker.finished.connect(self._overlay.stop)
         worker.finished.connect(self.reload)
         self._worker = worker
+        self._overlay.start(f"Restoring {len(records)} famil{'y' if len(records) == 1 else 'ies'} from the backup…")
         worker.start()
 
     def _on_restored(self, backup_record, records: list[FamilyRecord]):

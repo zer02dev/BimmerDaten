@@ -43,7 +43,7 @@ from winkfp_health import (
     run_health_check,
 )
 from winkfp_parser import WinkfpPaths
-from winkfp_widgets import html_page, style_tree
+from winkfp_widgets import LoadingOverlay, Worker, html_page, style_tree
 
 logger = logging.getLogger("bimmerdaten.winkfp_health_tab")
 
@@ -115,7 +115,9 @@ class HealthTab(QWidget):
         self._paths_provider = paths_provider
         self._report: HealthReport | None = None
         self._checked_once = False
+        self._check_worker: Worker | None = None
         self._build_ui()
+        self._overlay = LoadingOverlay(self)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -190,18 +192,28 @@ class HealthTab(QWidget):
             self.run_check()
 
     def run_check(self):
-        paths = self._paths_provider()
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            report = run_health_check(paths)
-        except Exception as exc:
-            logger.exception("WinKFP health check failed")
-            self.summary_label.setText(f"<span style='color:#a8001c;'>Check failed: {html_escape(str(exc))}</span>")
+        if self._check_worker is not None and self._check_worker.isRunning():
             return
-        finally:
-            QApplication.restoreOverrideCursor()
+        paths = self._paths_provider()
+        self.check_btn.setEnabled(False)
+        self._overlay.start("Checking the WinKFP installation…")
+        worker = Worker(lambda: run_health_check(paths), self)
+        worker.finishedWithResult.connect(self._on_check_done)
+        worker.failed.connect(self._on_check_failed)
+        worker.finished.connect(self._on_check_finished)
+        self._check_worker = worker
+        worker.start()
+
+    def _on_check_done(self, report: HealthReport):
         self._report = report
         self._populate(report)
+
+    def _on_check_failed(self, message: str):
+        self.summary_label.setText(f"<span style='color:#a8001c;'>Check failed: {html_escape(message)}</span>")
+
+    def _on_check_finished(self):
+        self._overlay.stop()
+        self.check_btn.setEnabled(True)
 
     def _populate(self, report: HealthReport):
         self.tree.blockSignals(True)

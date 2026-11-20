@@ -114,7 +114,7 @@ class SAOptionsWidget(QWidget):
         top.addWidget(self.vin_label, 1)
 
         self.fa_trc_status_label = QLabel("No fa.trc file")
-        self.fa_trc_status_label.setStyleSheet("color: #888;")
+        self.fa_trc_status_label.setStyleSheet("color: #4a4a4a;")
         top.addWidget(self.fa_trc_status_label)
 
         self.load_btn = QPushButton("Load any file (FA)")
@@ -188,7 +188,7 @@ class SAOptionsWidget(QWidget):
         
         # File not found: set status label and ask user if they want to manually select
         self.fa_trc_status_label.setText("No fa.trc file")
-        self.fa_trc_status_label.setStyleSheet("color: #888;")
+        self.fa_trc_status_label.setStyleSheet("color: #4a4a4a;")
         reply = QMessageBox.question(
             self,
             "Load fa.trc",

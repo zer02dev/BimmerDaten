@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_parser import WinkfpPaths
-from winkfp_widgets import Worker, html_page, style_tree
+from winkfp_widgets import LoadingOverlay, Worker, html_page, style_tree
 from winkfp_snapshot import (
     SECTION_DATA,
     SECTION_TITLES,
@@ -60,6 +60,7 @@ class UpdatesTab(QWidget):
         self._worker: Worker | None = None
         self._auto_checked = False
         self._build_ui()
+        self._overlay = LoadingOverlay(self)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -208,9 +209,11 @@ class UpdatesTab(QWidget):
         worker.failed.connect(self._on_failed)
         worker.finished.connect(self._on_worker_finished)
         self._worker = worker
+        self._overlay.start(message)
         worker.start()
 
     def _on_worker_finished(self):
+        self._overlay.stop()
         self.compare_btn.setEnabled(self.target_combo.currentData() is not None)
         self.baseline_btn.setEnabled(True)
 

@@ -44,7 +44,7 @@ from winkfp_parser import (
     list_files_ci,
     load_kfconf,
 )
-from winkfp_widgets import Worker, html_page, style_table
+from winkfp_widgets import LoadingOverlay, Worker, html_page, style_table
 
 logger = logging.getLogger("bimmerdaten.winkfp_sgdat_tab")
 
@@ -153,6 +153,7 @@ class SgdatTab(QWidget):
         self._worker: Worker | None = None
         self._loaded = False
         self._build_ui()
+        self._overlay = LoadingOverlay(self)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -222,7 +223,9 @@ class SgdatTab(QWidget):
         worker = Worker(lambda: load_sgdat_rows(paths), self)
         worker.finishedWithResult.connect(self._on_loaded)
         worker.failed.connect(lambda msg: self.count_label.setText(f"Failed: {msg}"))
+        worker.finished.connect(self._overlay.stop)
         self._worker = worker
+        self._overlay.start("Reading and classifying all SGDAT *.ipo files…")
         worker.start()
 
     def _on_loaded(self, rows: list[SgdatRow]):

@@ -312,9 +312,9 @@ QMainWindow {
 
 QWidget {
     background-color: #d4d0c8;
-    font-family: "Tahoma", "MS Sans Serif", sans-serif;
-    font-size: 11px;
-    color: #000000;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
+    color: #111111;
 }
 
 QMenuBar {
@@ -355,8 +355,13 @@ QListWidget {
     border: 2px inset #808080;
     selection-background-color: #000080;
     selection-color: #ffffff;
-    font-family: "Courier New", monospace;
-    font-size: 11px;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
+    alternate-background-color: #eef2f8;
+}
+
+QListWidget::item {
+    padding: 2px 2px;
 }
 
 QListWidget::item:hover {
@@ -368,8 +373,13 @@ QTreeWidget {
     border: 2px inset #808080;
     selection-background-color: #000080;
     selection-color: #ffffff;
-    font-family: "Courier New", monospace;
-    font-size: 11px;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
+    alternate-background-color: #eef2f8;
+}
+
+QTreeWidget::item {
+    padding: 3px 2px;
 }
 
 QTreeWidget::item:hover {
@@ -386,8 +396,25 @@ QTableWidget {
     border: 2px inset #808080;
     selection-background-color: #000080;
     selection-color: #ffffff;
-    font-family: "Courier New", monospace;
-    font-size: 11px;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
+    color: #111111;
+    alternate-background-color: #eef2f8;
+    gridline-color: #c8ccd4;
+}
+
+QTableWidget::item {
+    padding: 2px 6px;
+}
+
+QHeaderView::section {
+    background-color: #e2dfd8;
+    color: #111111;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 4px 4px;
+    border: 1px solid #a0a0a0;
 }
 
 QTableWidget::item:hover {
@@ -402,15 +429,22 @@ QTableWidget::item:selected {
 QLineEdit {
     background-color: #ffffff;
     border: 2px inset #808080;
-    padding: 2px;
-    font-family: "Courier New", monospace;
+    padding: 3px;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
 }
 
-QTextEdit {
+QTextEdit, QTextBrowser, QPlainTextEdit {
     background-color: #ffffff;
     border: 2px inset #808080;
-    font-family: "Courier New", monospace;
-    font-size: 11px;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 13px;
+    color: #111111;
+}
+
+QTextEdit#mono, QPlainTextEdit#mono {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 13px;
 }
 
 QPushButton {
@@ -419,7 +453,7 @@ QPushButton {
     border-left: 2px solid #ffffff;
     border-bottom: 2px solid #808080;
     border-right: 2px solid #808080;
-    padding: 3px 10px;
+    padding: 4px 10px;
     min-width: 70px;
 }
 
@@ -437,7 +471,7 @@ QPushButton:hover {
 QComboBox {
     background-color: #ffffff;
     border: 2px inset #808080;
-    padding: 2px;
+    padding: 3px;
 }
 
 QComboBox::drop-down {
@@ -454,7 +488,7 @@ QSplitter::handle {
 QStatusBar {
     background-color: #d4d0c8;
     border-top: 1px solid #808080;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 QTabWidget::pane {
@@ -465,7 +499,7 @@ QTabBar::tab {
     background-color: #d4d0c8;
     border: 1px solid #808080;
     border-bottom: none;
-    padding: 3px 8px;
+    padding: 5px 12px;
 }
 
 QTabBar::tab:selected {
@@ -478,12 +512,21 @@ QLabel#title_label {
     background-color: #000080;
     color: #ffffff;
     font-weight: bold;
-    font-size: 12px;
+    font-size: 13px;
     padding: 4px 8px;
 }
 
 QFrame#separator {
     border: 1px inset #808080;
+}
+
+QToolTip {
+    background-color: #ffffe1;
+    color: #000000;
+    border: 1px solid #808080;
+    padding: 4px;
+    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-size: 12px;
 }
 """
 
@@ -661,7 +704,7 @@ class JobDetailPanel(QWidget):
 
         self.args_label = QLabel("Arguments (input):")
         self.args_label.setStyleSheet(
-            "font-size: 9px; color: #555555; font-weight: bold;"
+            "font-size: 12px; color: #3f3f3f; font-weight: bold;"
         )
         comment_layout.addWidget(self.args_label)
 
@@ -681,7 +724,7 @@ class JobDetailPanel(QWidget):
 
         self.results_label = QLabel("Results (output):")
         self.results_label.setStyleSheet(
-            "font-size: 9px; color: #555555; font-weight: bold;"
+            "font-size: 12px; color: #3f3f3f; font-weight: bold;"
         )
         comment_layout.addWidget(self.results_label)
 
@@ -725,7 +768,7 @@ class JobDetailPanel(QWidget):
 
         self._tables_info_label = QLabel("Tables used by this job")
         self._tables_info_label.setStyleSheet(
-            "font-size: 10px; color: #666666; font-style: italic;"
+            "font-size: 12px; color: #3f3f3f; font-style: italic;"
         )
         self._tables_info_label.setVisible(False)
 
@@ -744,6 +787,7 @@ class JobDetailPanel(QWidget):
         dis_widget = QWidget()
         dis_layout = QVBoxLayout(dis_widget)
         self.dis_text = QTextEdit()
+        self.dis_text.setObjectName("mono")  # disassembly stays monospace
         self.dis_text.setReadOnly(True)
         self.dis_text.setFont(QFont("Courier New", 10))
         self.dis_text.setStyleSheet(
@@ -881,7 +925,7 @@ class JobDetailPanel(QWidget):
         if fallback_missing:
             html_text = (
                 f"<span>{rendered_text}</span> "
-                f"<span style='color:#808080; font-size: 9px;'>⚠️ no translation</span>"
+                f"<span style='color:#4a4a4a; font-size: 11px;'>⚠️ no translation</span>"
             )
             self.job_comment_label.setText(html_text)
             self.job_comment_label.setToolTip(
@@ -893,7 +937,7 @@ class JobDetailPanel(QWidget):
         if is_live_translated:
             html_text = (
                 f"<span>{rendered_text}</span> "
-                f"<span style='color:#808080; font-size: 9px;'>🌐 (auto)</span>"
+                f"<span style='color:#4a4a4a; font-size: 11px;'>🌐 (auto)</span>"
             )
             self.job_comment_label.setText(html_text)
             self.job_comment_label.setToolTip(
@@ -1046,7 +1090,7 @@ class JobDetailPanel(QWidget):
             return
 
         self.job_comment_label.setStyleSheet(
-            "color: #808080;"
+            "color: #4a4a4a;"
             "font-weight: bold;"
         )
 
@@ -1082,17 +1126,17 @@ class JobDetailPanel(QWidget):
 
             if desc:
                 name_label = QLabel(desc[0])
-                name_label.setStyleSheet("font-weight: bold; font-size: 11px; color: #1a3a5c;")
+                name_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #1a3a5c;")
                 name_label.setWordWrap(True)
                 content_layout.addWidget(name_label)
 
                 desc_label = QLabel(desc[1])
                 desc_label.setWordWrap(True)
-                desc_label.setStyleSheet("font-size: 10px; color: #333;")
+                desc_label.setStyleSheet("font-size: 12px; color: #222;")
                 content_layout.addWidget(desc_label)
             else:
                 no_data = QLabel("No description available for this table.")
-                no_data.setStyleSheet("font-size: 10px; color: #888; font-style: italic;")
+                no_data.setStyleSheet("font-size: 12px; color: #4a4a4a; font-style: italic;")
                 content_layout.addWidget(no_data)
 
             layout.addLayout(content_layout)
@@ -1115,7 +1159,7 @@ class JobDetailPanel(QWidget):
 
             title_label = QLabel(table_name)
             title_label.setStyleSheet(
-                "font-size: 9px; color: #555555; font-weight: bold;"
+                "font-size: 12px; color: #3f3f3f; font-weight: bold;"
             )
             title_row.addWidget(title_label)
             layout.addLayout(title_row)
@@ -1456,7 +1500,7 @@ class TablesPanel(QWidget):
         self._desc_btn.setFixedWidth(24)
         self._desc_btn.setEnabled(False)
         self._desc_btn.setStyleSheet(
-            "QPushButton { font-size: 9px; font-weight: bold;"
+            "QPushButton { font-size: 11px; font-weight: bold; min-width: 0px;"
             "  border: 1px solid #888; border-radius: 8px;"
             "  background: #ddd; color: #333; padding: 0px; }"
             "QPushButton:hover { background: #bbb; }"
@@ -1513,18 +1557,18 @@ class TablesPanel(QWidget):
         if desc:
             name_lbl = QLabel(desc[0])
             name_lbl.setStyleSheet(
-                "font-weight: bold; font-size: 11px; color: #1a3a5c;"
+                "font-weight: bold; font-size: 13px; color: #1a3a5c;"
             )
             name_lbl.setWordWrap(True)
             content.addWidget(name_lbl)
             desc_lbl = QLabel(desc[1])
             desc_lbl.setWordWrap(True)
-            desc_lbl.setStyleSheet("font-size: 10px; color: #333;")
+            desc_lbl.setStyleSheet("font-size: 12px; color: #222;")
             content.addWidget(desc_lbl)
         else:
             no_data = QLabel("No description available for this table.")
             no_data.setStyleSheet(
-                "font-size: 10px; color: #888; font-style: italic;"
+                "font-size: 12px; color: #4a4a4a; font-style: italic;"
             )
             content.addWidget(no_data)
 
