@@ -19,7 +19,7 @@ logger = logging.getLogger("bimmerdaten.app_update")
 
 # Single place to change on a release (also update installer/BimmerDaten.iss
 # and scripts/build-installer.ps1).
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 REPO = "zer02dev/BimmerDaten"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases"

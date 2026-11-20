@@ -3,7 +3,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"/></a>
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue"/>
-  <img src="https://img.shields.io/badge/Version-1.2.0-green"/>
+  <img src="https://img.shields.io/badge/Version-1.3.0-green"/>
   <img src="https://img.shields.io/badge/Platform-Windows-lightgrey"/>
   <img src="https://img.shields.io/badge/BMW%20Standard%20Tools-required-orange"/>
 </p>
@@ -92,8 +92,8 @@ A built-in **📖 Docs** tab explains the BMW Standard Tools in plain English: w
 ### Other
 - INPA model parser with script-to-PRG file discovery
 - FA/SA decoder for `AT.000` and `fa.trc` files
-- **🔎 VIN decoder** (SA Options) — decodes a VIN offline: manufacturer, type key looked up in your NCS Expert `*AT.000` files (model, body, engine, drive side, market, production period), check digit, model year and short VIN; uses the VIN read from the car (`SYSDATEN.TRC`) or one you type, and shows the vehicle order from `fa.trc` next to it
-- **New version check** — at startup BimmerDaten asks GitHub for the newest release and shows a bar with a download link (Help → *Check for new version…*; can be turned off)
+- **🔎 VIN decoder** (SA Options, *new in 1.3.0*) — decodes a VIN offline: manufacturer, type key looked up in your NCS Expert `*AT.000` files (model, body, engine, drive side, market, production period), check digit, model year and short VIN; uses the VIN read from the car (`SYSDATEN.TRC`) or one you type, and shows the vehicle order from `fa.trc` next to it
+- **New version check** *(new in 1.3.0)* — at startup BimmerDaten asks GitHub for the newest release and shows a bar with a download link (Help → *Check for new version…*; can be turned off)
 - SQLite-based local database — no cloud, no account required
 - Retro Windows look with modern, readable fonts
 
@@ -249,8 +249,8 @@ BimmerDaten to narzędzie dla entuzjastów i techników pracujących z plikami d
 - Tłumaczenia jobów EDIABAS (DE → EN, PL) z własnej bazy offline + fallback online
 - Tłumaczenia parametrów kodowania NCS z pliku `Translations.csv` NCS Dummy (© REVTOR) — wymagana lokalna instalacja NCS Dummy
 - Dekoder kodów FA/SA z plików `AT.000` i `fa.trc`
-- **Dekoder VIN** (SA Options) — offline: producent, model, nadwozie, silnik i lata produkcji z kodu typu (z plików NCS Expert), cyfra kontrolna, rok modelowy i krótki VIN; bierze VIN odczytany z auta albo wpisany ręcznie
-- **Powiadomienie o nowej wersji** — przy starcie aplikacja sprawdza na GitHubie najnowsze wydanie (Help → *Check for new version…*, można wyłączyć)
+- **Dekoder VIN** (SA Options, nowość w 1.3.0) — offline: producent, model, nadwozie, silnik i lata produkcji z kodu typu (z plików NCS Expert), cyfra kontrolna, rok modelowy i krótki VIN; bierze VIN odczytany z auta albo wpisany ręcznie
+- **Powiadomienie o nowej wersji (nowość w 1.3.0)** — przy starcie aplikacja sprawdza na GitHubie najnowsze wydanie (Help → *Check for new version…*, można wyłączyć)
 - Eksport raportów kodowania do PDF
 - **Pomocnik WinKFP (nowość w 1.1.0)** — sprawdzanie i naprawa instalacji WinKFP, wykrywanie zmian po aktualizacji SP-Daten, lista rodzin sterowników z pojazdami i silnikami, asystent „co wgrać” (numer HW / ZB → najnowszy ZB i gotowe ustawienia trybu Expert), przeglądarka SGDAT, wyjaśnienia błędów z logów i presety trybu Expert
 - **Zakładka Docs (nowość w 1.2.0)** — opis wszystkich programów BMW Standard Tools i ich plików (po angielsku), z wyszukiwarką i informacją, gdzie dane pliki są na Twoim komputerze
