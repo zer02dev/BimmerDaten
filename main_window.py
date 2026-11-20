@@ -2947,7 +2947,7 @@ class MainWindow(QMainWindow):
 
         # Version / author row
         meta = QLabel(
-            "<b>Version:</b> v1.0 &nbsp;&nbsp; "
+            "<b>Version:</b> v1.1.0 &nbsp;&nbsp; "
             "<b>Author:</b> Filip Dzitko (zer02dev) &nbsp;&nbsp; "
             "<b>License:</b> GPL-3.0"
         )
@@ -3124,7 +3124,7 @@ class SplashScreen(QWidget):
         title_layout.addWidget(title_text)
         title_layout.addStretch()
 
-        ver_title = QLabel("v1.0")
+        ver_title = QLabel("v1.1.0")
         ver_title.setStyleSheet(
             "color: #aaaacc;"
             "font-family: 'Tahoma';"
