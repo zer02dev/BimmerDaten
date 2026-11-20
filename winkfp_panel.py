@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from winkfp_health_tab import HealthTab
 from winkfp_parser import (
     InstallSummary,
     WinkfpPaths,
@@ -35,7 +36,7 @@ logger = logging.getLogger("bimmerdaten.winkfp_panel")
 
 # Sub-tabs planned for the next stages: (title, stage, description).
 PLANNED_TABS = [
-    ("🩺 Health", "E1–E2", "Installation check: INFO.<lang>, KFCONF ↔ SGDAT ↔ Ecu ↔ DATA, fixes with backup, post-update check."),
+    ("🩺 Health", "E1", "Installation check with fixes and backup."),
     ("📦 Families", "E5", "ECU families with completeness status, integration positions, ZB table, restore from backups."),
     ("🔎 What to flash", "E6", "Assistant: HW number / ZB → family → ZB history → HW compatibility → files for Expert mode."),
     ("🗂 SGDAT", "E3", "All *.ipo files classified as flash (PABD) or coding (CABD), with job list and author."),
@@ -60,8 +61,35 @@ class WinkfpPanel(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Sub-tabs fill the whole window, like the Diagnosis tab.
+        self.sub_tabs = QTabWidget()
+        layout.addWidget(self.sub_tabs)
+
+        self.health_tab = HealthTab(self._current_paths)
+        self.health_tab.filesChanged.connect(self.refresh)
+        self.sub_tabs.addTab(self.health_tab, PLANNED_TABS[0][0])
+        for title, stage, description in PLANNED_TABS[1:]:
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            text = QLabel(
+                f"<b>{html_escape(title)}</b><br><br>{html_escape(description)}"
+                f"<br><br><i>Planned in stage {stage}.</i>"
+            )
+            text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            text.setWordWrap(True)
+            text.setStyleSheet("color: #666;")
+            page_layout.addWidget(text)
+            self.sub_tabs.addTab(page, title)
+
+        # Installation tab: paths + overview.
+        install_page = QWidget()
+        install_layout = QVBoxLayout(install_page)
+        install_layout.setContentsMargins(8, 8, 8, 8)
+        install_layout.setSpacing(8)
+        self.sub_tabs.addTab(install_page, "⚙️ Installation")
 
         paths_box = QGroupBox("Paths")
         paths_form = QFormLayout(paths_box)
@@ -77,7 +105,7 @@ class WinkfpPanel(QWidget):
         buttons.addWidget(self.save_btn)
         buttons.addWidget(self.refresh_btn)
         paths_form.addRow(buttons)
-        layout.addWidget(paths_box)
+        install_layout.addWidget(paths_box)
 
         summary_box = QGroupBox("Installation overview")
         summary_form = QFormLayout(summary_box)
@@ -99,22 +127,8 @@ class WinkfpPanel(QWidget):
             label.setWordWrap(True)
             self._summary_labels[key] = label
             summary_form.addRow(f"{title}:", label)
-        layout.addWidget(summary_box)
-
-        self.sub_tabs = QTabWidget()
-        for title, stage, description in PLANNED_TABS:
-            page = QWidget()
-            page_layout = QVBoxLayout(page)
-            text = QLabel(
-                f"<b>{html_escape(title)}</b><br><br>{html_escape(description)}"
-                f"<br><br><i>Planned in stage {stage}.</i>"
-            )
-            text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            text.setWordWrap(True)
-            text.setStyleSheet("color: #666;")
-            page_layout.addWidget(text)
-            self.sub_tabs.addTab(page, title)
-        layout.addWidget(self.sub_tabs, 1)
+        install_layout.addWidget(summary_box)
+        install_layout.addStretch(1)
 
     def _path_row(self, form: QFormLayout, label: str, value: str) -> QLineEdit:
         row = QWidget()
@@ -153,6 +167,7 @@ class WinkfpPanel(QWidget):
             return
         self._paths = paths
         self.refresh()
+        self.health_tab.run_check()
 
     def refresh(self):
         self._paths = self._current_paths()

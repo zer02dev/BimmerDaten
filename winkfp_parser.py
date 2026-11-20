@@ -394,6 +394,12 @@ class DatEntry:
         match = re.search(r"([A-Za-z]+)$", self.sw_nr)
         return match.group(1).upper() if match else ""
 
+    @property
+    def has_data_file(self) -> bool:
+        """SW-NR 0000000 means: program only, no data data set."""
+        number = self.sw_number
+        return bool(number) and set(number) != {"0"}
+
     def program_file_name(self) -> str:
         """Program data set: <HW-NR><index>.0PA"""
         return f"{self.hw_nr}{self.index}.0PA"
@@ -634,6 +640,7 @@ class IpoInfo:
     author: str = ""
     source_name: str = ""
     size: int = 0
+    identifiers: set[str] = field(default_factory=set)
 
     @property
     def name(self) -> str:
@@ -669,6 +676,7 @@ def classify_ipo(path: Path) -> IpoInfo:
             if _IPO_IDENT_RE.match(candidate) and not _IPO_JOB_RE.match(candidate) and candidate not in jobs:
                 jobs.append(candidate)
     info.jobs = jobs
+    info.identifiers = {value for value in string_set if re.fullmatch(r"[0-9A-Za-z_]{4,}", value)}
 
     for value in strings:
         if value.upper().endswith(".IPS") and not info.source_name:
@@ -676,6 +684,17 @@ def classify_ipo(path: Path) -> IpoInfo:
         if not info.author and re.search(r"\bBMW\b", value) and len(value) < 80:
             info.author = value.strip()
     return info
+
+
+def ipo_family_stem(file_name: str) -> str:
+    """'07dde71.ipo' -> 'DDE71' (version prefix digits stripped)."""
+    stem = Path(file_name).stem.upper()
+    return re.sub(r"^\d+", "", stem)
+
+
+def ipo_version(file_name: str) -> int:
+    match = re.match(r"^(\d+)", Path(file_name).stem)
+    return int(match.group(1)) if match else -1
 
 
 # ---------------------------------------------------------------------------
