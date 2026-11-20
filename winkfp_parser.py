@@ -627,8 +627,10 @@ PABD_MARKERS = {
     "LoescheFlash", "FlashStatusLesen", "SG_AIF_SCHREIBEN",
 }
 CABD_MARKERS = {"SG_CODIEREN", "CODIERDATEN_LESEN", "C_C_AUFTRAG", "C_C_LESEN", "CODIERINDEX_LESEN"}
+SWT_MARKERS = {"STORE_FSC", "CHECK_FSC", "STORE_CERTIFICATE"}
 IPO_KIND_PABD = "PABD"
 IPO_KIND_CABD = "CABD"
+IPO_KIND_SWT = "SWT"
 IPO_KIND_UNKNOWN = "?"
 
 
@@ -667,6 +669,11 @@ def classify_ipo(path: Path) -> IpoInfo:
     if string_set & PABD_MARKERS:
         info.kind = IPO_KIND_PABD
     elif string_set & CABD_MARKERS:
+        info.kind = IPO_KIND_CABD
+    elif string_set & SWT_MARKERS:
+        info.kind = IPO_KIND_SWT
+    elif path.name.upper().startswith("A_"):
+        # Special NCS coding sequences (e.g. A_EWSSYN) without the usual coding jobs.
         info.kind = IPO_KIND_CABD
 
     jobs: list[str] = []

@@ -9,7 +9,7 @@ import logging
 from collections.abc import Callable
 from html import escape as html_escape
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_parser import WinkfpPaths
+from winkfp_widgets import Worker
 from winkfp_snapshot import (
     SECTION_DATA,
     SECTION_TITLES,
@@ -47,22 +48,6 @@ logger = logging.getLogger("bimmerdaten.winkfp_updates_tab")
 MAX_FILES_PER_GROUP = 500
 
 
-class _Worker(QThread):
-    finishedWithResult = pyqtSignal(object)
-    failed = pyqtSignal(str)
-
-    def __init__(self, func: Callable[[], object], parent=None):
-        super().__init__(parent)
-        self._func = func
-
-    def run(self):
-        try:
-            self.finishedWithResult.emit(self._func())
-        except Exception as exc:
-            logger.exception("WinKFP updates worker failed")
-            self.failed.emit(str(exc))
-
-
 class UpdatesTab(QWidget):
     """Snapshot comparison and backup-folder comparison."""
 
@@ -72,7 +57,7 @@ class UpdatesTab(QWidget):
     def __init__(self, paths_provider: Callable[[], WinkfpPaths], parent=None):
         super().__init__(parent)
         self._paths_provider = paths_provider
-        self._worker: _Worker | None = None
+        self._worker: Worker | None = None
         self._auto_checked = False
         self._build_ui()
 
@@ -217,7 +202,7 @@ class UpdatesTab(QWidget):
         self.status_label.setText(message)
         self.compare_btn.setEnabled(False)
         self.baseline_btn.setEnabled(False)
-        worker = _Worker(func, self)
+        worker = Worker(func, self)
         worker.finishedWithResult.connect(on_done)
         worker.failed.connect(self._on_failed)
         worker.finished.connect(self._on_worker_finished)
