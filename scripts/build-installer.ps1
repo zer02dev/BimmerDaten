@@ -1,6 +1,6 @@
 param(
     [string]$IsccPath = "",
-    [string]$AppVersion = "1.1.0",
+    [string]$AppVersion = "1.2.0",
     [switch]$Clean
 )
 

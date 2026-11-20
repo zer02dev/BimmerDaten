@@ -3,7 +3,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"/></a>
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue"/>
-  <img src="https://img.shields.io/badge/Version-1.1.0-green"/>
+  <img src="https://img.shields.io/badge/Version-1.2.0-green"/>
   <img src="https://img.shields.io/badge/Platform-Windows-lightgrey"/>
   <img src="https://img.shields.io/badge/BMW%20Standard%20Tools-required-orange"/>
 </p>
@@ -78,7 +78,7 @@ WinKFP is powerful but opaque. BimmerDaten reads the same files WinKFP uses (`C:
 - **💾 Presets** — named Expert-mode configurations; *Load into WinKFP* writes `WINKFPT.INI` and copies the flash files to `DATA\DEVELOP` (the only folder Expert mode lists)
 - Every change to the WinKFP installation is previewed, backed up to `%LOCALAPPDATA%\BimmerDaten\WinKFP_backups` and can be undone
 
-### Docs
+### Docs *(new in 1.2.0)*
 A built-in **📖 Docs** tab explains the BMW Standard Tools in plain English: what EDIABAS, INPA, Tool32, NCS Expert and WinKFP do, every file they use (SGBD, `.ipo` PABD / CABD / SWT, NCS `DATEN` and `WORK` files, KFCONF, INFO, HWNR, DAT / HIS / HWH, 0PA / 0DA, `Winkfpt.ini` …), WinKFP concepts (Comfort vs Expert, ZB, HW number, integration position), error codes and a glossary.
 - Full-text search with highlighting, back / forward navigation
 - **📍 On this PC** — each file topic shows where the files are on your computer, how many there are, and opens the folder
@@ -249,7 +249,7 @@ BimmerDaten to narzędzie dla entuzjastów i techników pracujących z plikami d
 - Dekoder kodów FA/SA z plików `AT.000` i `fa.trc`
 - Eksport raportów kodowania do PDF
 - **Pomocnik WinKFP (nowość w 1.1.0)** — sprawdzanie i naprawa instalacji WinKFP, wykrywanie zmian po aktualizacji SP-Daten, lista rodzin sterowników z pojazdami i silnikami, asystent „co wgrać” (numer HW / ZB → najnowszy ZB i gotowe ustawienia trybu Expert), przeglądarka SGDAT, wyjaśnienia błędów z logów i presety trybu Expert
-- **Zakładka Docs** — opis wszystkich programów BMW Standard Tools i ich plików (po angielsku), z wyszukiwarką i informacją, gdzie dane pliki są na Twoim komputerze
+- **Zakładka Docs (nowość w 1.2.0)** — opis wszystkich programów BMW Standard Tools i ich plików (po angielsku), z wyszukiwarką i informacją, gdzie dane pliki są na Twoim komputerze
 
 **Wymagania:** BMW Standard Tools (EDIABAS, NCS Expert, opcjonalnie WinKFP), Python 3.10+, opcjonalnie NCS Dummy dla tłumaczeń parametrów kodowania.
 
