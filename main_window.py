@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont, QAction, QColor, QPalette, QIcon, QPixmap, QShowEvent
 
 from app_logger import get_log_file_path, get_logs_dir_path, setup_logger
+from app_update import APP_VERSION, AppReleaseCheckWorker
 
 
 logger = logging.getLogger("bimmerdaten.main_window")
@@ -2089,6 +2090,8 @@ class MainWindow(QMainWindow):
         self._startup_guard_ran = False
         self._sa_config = self._load_sa_config()
         self._update_worker: UpdateCheckWorker | None = None
+        self._release_worker: AppReleaseCheckWorker | None = None
+        self._release_check_manual = False
 
         if DB_AVAILABLE:
             logger.info("MainWindow.__init__: initializing database")
@@ -2107,6 +2110,9 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._start_update_check()
+        if self._release_check_enabled():
+            QTimer.singleShot(1500, lambda: self._check_app_release(manual=False))
+        QApplication.instance().aboutToQuit.connect(self._wait_for_release_worker)
         self.setStyleSheet(WIN98_STYLE)
         logger.info("MainWindow.__init__: startup guard will run after first showEvent")
         logger.info("MainWindow.__init__: done")
@@ -2427,6 +2433,29 @@ class MainWindow(QMainWindow):
 
         main_layout.insertWidget(0, self.update_bar)
 
+        # New app version bar (GitHub release check).
+        self.release_bar = QWidget()
+        self.release_bar.setVisible(False)
+        self.release_bar.setStyleSheet("background-color: #dcecff; border-bottom: 1px solid #0f4c8a;")
+        release_layout = QHBoxLayout(self.release_bar)
+        release_layout.setContentsMargins(8, 4, 8, 4)
+        self.release_bar_label = QLabel("")
+        release_layout.addWidget(self.release_bar_label, 1)
+        release_download_btn = QPushButton("Download")
+        release_download_btn.setFixedWidth(90)
+        release_download_btn.clicked.connect(self._open_release_page)
+        release_layout.addWidget(release_download_btn)
+        release_skip_btn = QPushButton("Skip this version")
+        release_skip_btn.setFixedWidth(130)
+        release_skip_btn.clicked.connect(self._skip_release)
+        release_layout.addWidget(release_skip_btn)
+        release_close_btn = QPushButton("Dismiss")
+        release_close_btn.setFixedWidth(70)
+        release_close_btn.clicked.connect(self.release_bar.hide)
+        release_layout.addWidget(release_close_btn)
+        self._latest_release: dict = {}
+        main_layout.insertWidget(1, self.release_bar)
+
         welcome_bar = QWidget()
         welcome_bar.setStyleSheet("background-color: #000080; border-bottom: 1px solid #808080;")
         welcome_layout = QHBoxLayout(welcome_bar)
@@ -2622,9 +2651,109 @@ class MainWindow(QMainWindow):
         logs_action = QAction("Open Logs Folder", self)
         logs_action.triggered.connect(self._open_logs_folder)
         help_menu.addAction(logs_action)
+        help_menu.addSeparator()
+        check_release_action = QAction("Check for new version…", self)
+        check_release_action.triggered.connect(lambda: self._check_app_release(manual=True))
+        help_menu.addAction(check_release_action)
+        self.release_at_start_action = QAction("Check for new versions at startup", self)
+        self.release_at_start_action.setCheckable(True)
+        self.release_at_start_action.setChecked(self._release_check_enabled())
+        self.release_at_start_action.toggled.connect(self._set_release_check_enabled)
+        help_menu.addAction(self.release_at_start_action)
+        help_menu.addSeparator()
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    # --- New app version (GitHub releases) ---------------------------------
+
+    def _app_setting(self, key: str, default: str = "") -> str:
+        if not self._db:
+            return default
+        try:
+            return self._db.get_setting(key, default) or default
+        except Exception:
+            logger.exception("Failed to read setting %s", key)
+            return default
+
+    def _set_app_setting(self, key: str, value: str):
+        if not self._db:
+            return
+        try:
+            self._db.set_setting(key, value)
+        except Exception:
+            logger.exception("Failed to save setting %s", key)
+
+    def _release_check_enabled(self) -> bool:
+        return self._app_setting("app_release_check", "1") != "0"
+
+    def _set_release_check_enabled(self, enabled: bool):
+        self._set_app_setting("app_release_check", "1" if enabled else "0")
+
+    def _check_app_release(self, manual: bool):
+        if self._release_worker is not None and self._release_worker.isRunning():
+            return
+        self._release_check_manual = manual
+        worker = AppReleaseCheckWorker(self)
+        worker.checked.connect(self._on_release_checked)
+        worker.failed.connect(self._on_release_check_failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(self._on_release_worker_finished)
+        self._release_worker = worker
+        worker.start()
+
+    def _wait_for_release_worker(self):
+        worker = self._release_worker
+        if worker is not None and worker.isRunning():
+            worker.wait(8000)
+
+    def _on_release_worker_finished(self):
+        self._release_worker = None
+
+    def _on_release_checked(self, info: dict):
+        self._latest_release = info
+        tag = str(info.get("tag") or "")
+        if not info.get("newer"):
+            if self._release_check_manual:
+                QMessageBox.information(
+                    self, "Check for new version",
+                    f"You have the newest version (v{APP_VERSION}).\n\nLatest release on GitHub: {tag}",
+                )
+            return
+        if not self._release_check_manual and tag == self._app_setting("app_release_skipped", ""):
+            return
+        self.release_bar_label.setText(
+            f"🆕 BimmerDaten {html_escape(tag)} is available (you have v{APP_VERSION})"
+        )
+        self.release_bar.setVisible(True)
+        if self._release_check_manual:
+            reply = QMessageBox.question(
+                self, "Check for new version",
+                f"BimmerDaten {tag} is available (you have v{APP_VERSION}).\n\nOpen the download page?",
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._open_release_page()
+
+    def _on_release_check_failed(self, message: str):
+        if self._release_check_manual:
+            QMessageBox.warning(
+                self, "Check for new version",
+                f"Could not check GitHub for a new version:\n{message}\n\nCheck your internet connection.",
+            )
+
+    def _open_release_page(self):
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        from app_update import RELEASES_PAGE
+
+        url = str(self._latest_release.get("url") or RELEASES_PAGE)
+        QDesktopServices.openUrl(QUrl(url))
+
+    def _skip_release(self):
+        tag = str(self._latest_release.get("tag") or "")
+        if tag:
+            self._set_app_setting("app_release_skipped", tag)
+        self.release_bar.hide()
 
     def _open_logs_folder(self):
         logs_dir = Path(get_logs_dir_path())
@@ -2995,7 +3124,7 @@ class MainWindow(QMainWindow):
 
         # Version / author row
         meta = QLabel(
-            "<b>Version:</b> v1.2.0 &nbsp;&nbsp; "
+            f"<b>Version:</b> v{APP_VERSION} &nbsp;&nbsp; "
             "<b>Author:</b> Filip Dzitko (zer02dev) &nbsp;&nbsp; "
             "<b>License:</b> GPL-3.0"
         )
@@ -3172,7 +3301,7 @@ class SplashScreen(QWidget):
         title_layout.addWidget(title_text)
         title_layout.addStretch()
 
-        ver_title = QLabel("v1.2.0")
+        ver_title = QLabel(f"v{APP_VERSION}")
         ver_title.setStyleSheet(
             "color: #aaaacc;"
             "font-family: 'Tahoma';"
