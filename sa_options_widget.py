@@ -32,7 +32,7 @@ logger = logging.getLogger("bimmerdaten.sa_options_widget")
 class SATranslationWorker(QThread):
     # Must not be called "finished": that would shadow QThread.finished, which is
     # what tells us the thread has really stopped and can be deleted.
-    translated = pyqtSignal(str, str, str)  # chassis, sa_code, desc_en
+    translated = pyqtSignal(str, str, str, str)  # chassis, sa_code, desc_en, error
 
     def __init__(self, chassis: str, sa_code: str, desc_de: str, parent=None):
         super().__init__(parent)
@@ -45,10 +45,17 @@ class SATranslationWorker(QThread):
             from deep_translator import GoogleTranslator
 
             translated = GoogleTranslator(source="german", target="english").translate(self.desc_de)
-            self.translated.emit(self.chassis, self.sa_code, translated or "")
-        except Exception:
+            if translated:
+                self.translated.emit(self.chassis, self.sa_code, translated, "")
+            else:
+                self.translated.emit(self.chassis, self.sa_code, "", "empty result")
+        except Exception as exc:
             logger.exception("SA translation worker failed for code %s", self.sa_code)
-            self.translated.emit(self.chassis, self.sa_code, "")
+            if type(exc).__name__ == "TooManyRequests":
+                error = "Google limit, try later"
+            else:
+                error = "no connection"
+            self.translated.emit(self.chassis, self.sa_code, "", error)
 
 
 class SAOptionsWidget(QWidget):
@@ -343,10 +350,10 @@ class SAOptionsWidget(QWidget):
         if self.db:
             cached = self.db.get_sa_translation(chassis, sa_code, "en")
             if cached:
-                self.table.setItem(row, 3, QTableWidgetItem(cached))
+                self._set_en_text(row, cached)
                 return
 
-        self.table.setItem(row, 3, QTableWidgetItem("⏳ translating..."))
+        self._set_en_text(row, "⏳ translating...")
         self._queue_translation(chassis, sa_code, desc_de)
 
     def _queue_translation(self, chassis: str, sa_code: str, desc_de: str):
@@ -376,7 +383,16 @@ class SAOptionsWidget(QWidget):
             if worker.isRunning() and not worker.wait(5000):
                 logger.warning("SA translation for %s still running at exit", worker.sa_code)
 
-    def _on_translation_done(self, chassis: str, sa_code: str, desc_en: str):
+    def _set_en_text(self, row: int, text: str, tooltip: str = ""):
+        """Change the EN cell text but keep the row's colour and bold font."""
+        item = self.table.item(row, 3)
+        if item is None:
+            item = QTableWidgetItem()
+            self.table.setItem(row, 3, item)
+        item.setText(text)
+        item.setToolTip(tooltip)
+
+    def _on_translation_done(self, chassis: str, sa_code: str, desc_en: str, error: str = ""):
         key = (chassis, sa_code)
         self._translation_pending.discard(key)
 
@@ -390,5 +406,13 @@ class SAOptionsWidget(QWidget):
         for row in range(self.table.rowCount()):
             sa_item = self.table.item(row, 0)
             if sa_item and (sa_item.text() or "").strip().upper() == sa_code.upper():
-                self.table.setItem(row, 3, QTableWidgetItem(desc_en or ""))
+                if desc_en:
+                    self._set_en_text(row, desc_en)
+                else:
+                    reason = error or "translation failed"
+                    self._set_en_text(
+                        row,
+                        f"⚠ {reason} (double-click to retry)",
+                        f"Translation failed: {reason}.",
+                    )
                 break
