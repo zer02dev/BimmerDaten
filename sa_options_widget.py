@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QCoreApplication, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -30,7 +30,9 @@ logger = logging.getLogger("bimmerdaten.sa_options_widget")
 
 
 class SATranslationWorker(QThread):
-    finished = pyqtSignal(str, str, str)  # chassis, sa_code, desc_en
+    # Must not be called "finished": that would shadow QThread.finished, which is
+    # what tells us the thread has really stopped and can be deleted.
+    translated = pyqtSignal(str, str, str)  # chassis, sa_code, desc_en
 
     def __init__(self, chassis: str, sa_code: str, desc_de: str, parent=None):
         super().__init__(parent)
@@ -43,10 +45,10 @@ class SATranslationWorker(QThread):
             from deep_translator import GoogleTranslator
 
             translated = GoogleTranslator(source="german", target="english").translate(self.desc_de)
-            self.finished.emit(self.chassis, self.sa_code, translated or "")
+            self.translated.emit(self.chassis, self.sa_code, translated or "")
         except Exception:
             logger.exception("SA translation worker failed for code %s", self.sa_code)
-            self.finished.emit(self.chassis, self.sa_code, "")
+            self.translated.emit(self.chassis, self.sa_code, "")
 
 
 class SAOptionsWidget(QWidget):
@@ -85,6 +87,10 @@ class SAOptionsWidget(QWidget):
         self._translation_pending: set[tuple[str, str]] = set()
         self._current_options: list[dict] = []
         self._auto_load_attempted = False
+
+        app = QCoreApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._wait_for_workers)
 
         self._setup_ui()
         self._load_models()
@@ -350,8 +356,9 @@ class SAOptionsWidget(QWidget):
         self._translation_pending.add(key)
 
         worker = SATranslationWorker(chassis, sa_code, desc_de, self)
-        worker.finished.connect(self._on_translation_done)
-        worker.finished.connect(lambda _c, _s, _d, w=worker: self._remove_worker(w))
+        worker.translated.connect(self._on_translation_done)
+        # QThread.finished fires only after run() has returned, so deleting here is safe.
+        worker.finished.connect(lambda w=worker: self._remove_worker(w))
         self._workers.append(worker)
         worker.start()
 
@@ -362,6 +369,12 @@ class SAOptionsWidget(QWidget):
             worker.deleteLater()
         except Exception:
             logger.exception("Failed to clean up SA translation worker")
+
+    def _wait_for_workers(self):
+        """Give running translations a moment to end before the app exits."""
+        for worker in list(self._workers):
+            if worker.isRunning() and not worker.wait(5000):
+                logger.warning("SA translation for %s still running at exit", worker.sa_code)
 
     def _on_translation_done(self, chassis: str, sa_code: str, desc_en: str):
         key = (chassis, sa_code)
