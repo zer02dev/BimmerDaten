@@ -57,6 +57,13 @@ except Exception:
     WINKFP_AVAILABLE = False
 
 try:
+    from docs_panel import DocsPanel
+    DOCS_AVAILABLE = True
+except Exception:
+    logging.getLogger("bimmerdaten.main_window").exception("Failed to import Docs panel")
+    DOCS_AVAILABLE = False
+
+try:
     import winsound
 except Exception:
     winsound = None
@@ -2557,6 +2564,16 @@ class MainWindow(QMainWindow):
 
         self.top_tabs.addTab(self.winkfp_panel, "⚡ WinKFP")
 
+        if DOCS_AVAILABLE:
+            self.docs_panel = DocsPanel(self, roots=self._docs_roots())
+            self.docs_panel.openAppTabRequested.connect(self._open_app_tab)
+        else:
+            self.docs_panel = QWidget()
+            docs_layout = QVBoxLayout(self.docs_panel)
+            docs_layout.addWidget(QLabel("Failed to load the Docs tab."))
+
+        self.top_tabs.addTab(self.docs_panel, "📖 Docs")
+
         if not self._inpa_path:
             self.models_panel.set_placeholder("INPA installation not found")
         else:
@@ -2825,6 +2842,37 @@ class MainWindow(QMainWindow):
         self._inpa_path = folder
         self._models_loaded_for_path = ""
         self._load_models_data(force_reload=True)
+
+    def _docs_roots(self) -> dict[str, str]:
+        """Folders the Docs tab uses to show where files are on this PC."""
+        roots = {"APPDATA": str(get_appdata_root(self._runtime_profile))}
+        if self._ecu_path:
+            roots["ECU"] = self._ecu_path
+            roots["EDIABAS"] = str(Path(self._ecu_path).parent)
+        if self._inpa_path:
+            roots["INPA"] = self._inpa_path
+        daten = (self._sa_config or {}).get("daten")
+        if daten:
+            roots["NCS"] = str(Path(daten).parent)
+        return roots
+
+    def _open_app_tab(self, target: str):
+        """Switch to a tab named in a Docs link: 'coding', 'winkfp/health', ..."""
+        main, _, sub = target.lower().partition("/")
+        names = {
+            "diagnosis": "diagnosis",
+            "coding": "coding",
+            "sa": "sa options",
+            "winkfp": "winkfp",
+            "docs": "docs",
+        }
+        wanted = names.get(main, main)
+        for index in range(self.top_tabs.count()):
+            if wanted in self.top_tabs.tabText(index).lower():
+                self.top_tabs.setCurrentIndex(index)
+                break
+        if sub and main == "winkfp" and hasattr(self.winkfp_panel, "select_sub_tab"):
+            self.winkfp_panel.select_sub_tab(sub)
 
     def _on_main_tab_changed(self, index: int):
         if index == self.models_tab_index:

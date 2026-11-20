@@ -243,6 +243,15 @@ class WinkfpPanel(QWidget):
         self.refresh()
         self.health_tab.run_check()
 
+    def select_sub_tab(self, name: str) -> bool:
+        """Show the sub-tab whose title contains `name` (case-insensitive)."""
+        wanted = name.lower()
+        for index in range(self.sub_tabs.count()):
+            if wanted in self.sub_tabs.tabText(index).lower():
+                self.sub_tabs.setCurrentIndex(index)
+                return True
+        return False
+
     def refresh(self):
         self._paths = self._current_paths()
         labels = self._summary_labels
