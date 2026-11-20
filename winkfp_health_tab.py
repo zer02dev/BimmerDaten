@@ -106,6 +106,7 @@ class HealthTab(QWidget):
     """Installation check with fixes."""
 
     filesChanged = pyqtSignal()
+    showUpdatesRequested = pyqtSignal()
 
     def __init__(self, paths_provider: Callable[[], WinkfpPaths], parent=None):
         super().__init__(parent)
@@ -132,6 +133,22 @@ class HealthTab(QWidget):
             bar.addWidget(button)
         layout.addLayout(bar)
 
+        self.update_banner = QWidget()
+        self.update_banner.setStyleSheet(
+            "QWidget { background-color: #fff4d6; border: 1px solid #e0b84c; border-radius: 3px; }"
+            "QLabel { border: none; }"
+        )
+        banner_layout = QHBoxLayout(self.update_banner)
+        banner_layout.setContentsMargins(8, 4, 8, 4)
+        self.update_banner_label = QLabel("")
+        self.update_banner_label.setWordWrap(True)
+        banner_layout.addWidget(self.update_banner_label, 1)
+        show_changes_btn = QPushButton("🔄 Show changes")
+        show_changes_btn.clicked.connect(self.showUpdatesRequested.emit)
+        banner_layout.addWidget(show_changes_btn)
+        self.update_banner.hide()
+        layout.addWidget(self.update_banner)
+
         splitter = QSplitter(Qt.Orientation.Vertical)
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Issue", "Category", "Fix"])
@@ -150,6 +167,16 @@ class HealthTab(QWidget):
         splitter.addWidget(self.details)
         splitter.setSizes([320, 180])
         layout.addWidget(splitter, 1)
+
+    def set_update_notice(self, changed: bool, summary: str):
+        """Show / hide the 'installation changed since last snapshot' banner."""
+        if changed:
+            self.update_banner_label.setText(
+                f"⚠️ <b>The installation changed since the last snapshot</b> (update?): {html_escape(summary)}"
+            )
+            self.update_banner.show()
+        else:
+            self.update_banner.hide()
 
     # --- check ---------------------------------------------------------------
 

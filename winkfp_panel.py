@@ -1,6 +1,6 @@
 """
 winkfp_panel.py
-WinKFP tab: helper for the BMW WinKFP flash tool (read-only in this stage).
+WinKFP tab: helper for the BMW WinKFP flash tool.
 """
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_health_tab import HealthTab
+from winkfp_updates_tab import UpdatesTab
 from winkfp_parser import (
     InstallSummary,
     WinkfpPaths,
@@ -54,8 +55,23 @@ class WinkfpPanel(QWidget):
         super().__init__(parent)
         self._paths = load_paths()
         self._summary: InstallSummary | None = None
+        self._pending_changes = False
         self._build_ui()
         self.refresh()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.updates_tab.auto_check()
+
+    def _on_changes_detected(self, changed: bool, summary: str):
+        self._pending_changes = changed
+        self.health_tab.set_update_notice(changed, summary)
+
+    def _on_files_changed_by_fix(self):
+        self.refresh()
+        # Changes made by BimmerDaten itself should not be reported as an update later.
+        if not self._pending_changes:
+            self.updates_tab.save_baseline("after BimmerDaten fix")
 
     # --- UI -----------------------------------------------------------------
 
@@ -69,8 +85,16 @@ class WinkfpPanel(QWidget):
         layout.addWidget(self.sub_tabs)
 
         self.health_tab = HealthTab(self._current_paths)
-        self.health_tab.filesChanged.connect(self.refresh)
+        self.health_tab.filesChanged.connect(self._on_files_changed_by_fix)
         self.sub_tabs.addTab(self.health_tab, PLANNED_TABS[0][0])
+
+        self.updates_tab = UpdatesTab(self._current_paths)
+        self.updates_tab.changesDetected.connect(self._on_changes_detected)
+        self.health_tab.showUpdatesRequested.connect(
+            lambda: self.sub_tabs.setCurrentWidget(self.updates_tab)
+        )
+        self.sub_tabs.addTab(self.updates_tab, "🔄 Updates")
+
         for title, stage, description in PLANNED_TABS[1:]:
             page = QWidget()
             page_layout = QVBoxLayout(page)
