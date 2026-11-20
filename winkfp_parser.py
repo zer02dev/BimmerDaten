@@ -721,13 +721,30 @@ class LogEntry:
     function: str
     source_line: int
     message: str = ""
+    block: int = 0      # entries of one error event share a block (separated by ==== lines)
+
+    @property
+    def message_text(self) -> str:
+        """Message without the trailing argument (job name, file name...)."""
+        parts = re.split(r"\s{2,}", self.message, maxsplit=1)
+        return parts[0].strip()
+
+    @property
+    def message_arg(self) -> str:
+        parts = re.split(r"\s{2,}", self.message, maxsplit=1)
+        return parts[1].strip() if len(parts) > 1 else ""
 
 
 def parse_error_log(path: Path) -> list[LogEntry]:
     """Parse WinKFP ERROR_<IF>_<unit>.LOG: a header line followed by a message line."""
     entries: list[LogEntry] = []
     current: LogEntry | None = None
+    block = 0
     for line in read_lines(path):
+        if line.startswith("====="):
+            block += 1
+            current = None
+            continue
         match = _LOG_LINE_RE.match(line)
         if not match:
             continue
@@ -742,6 +759,7 @@ def parse_error_log(path: Path) -> list[LogEntry]:
                 timestamp=stamp, app=match.group("app"), code=int(head.group("code")),
                 category=head.group("category"), source=head.group("source"),
                 function=head.group("function"), source_line=int(head.group("line")),
+                block=block,
             )
             entries.append(current)
         elif current is not None and not current.message:

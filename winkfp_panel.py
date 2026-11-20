@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from winkfp_health_tab import HealthTab
+from winkfp_logs_tab import LogsTab
 from winkfp_sgdat_tab import SgdatTab
 from winkfp_updates_tab import UpdatesTab
 from winkfp_parser import (
@@ -37,6 +38,7 @@ from winkfp_parser import (
 logger = logging.getLogger("bimmerdaten.winkfp_panel")
 
 SGDAT_TAB_TITLE = "🗂 SGDAT"
+LOGS_TAB_TITLE = "🧾 Logs"
 
 # Sub-tabs planned for the next stages: (title, stage, description).
 PLANNED_TABS = [
@@ -44,7 +46,7 @@ PLANNED_TABS = [
     ("📦 Families", "E5", "ECU families with completeness status, integration positions, ZB table, restore from backups."),
     ("🔎 What to flash", "E6", "Assistant: HW number / ZB → family → ZB history → HW compatibility → files for Expert mode."),
     (SGDAT_TAB_TITLE, "E3", "All *.ipo files classified as flash (PABD) or coding (CABD), with job list and author."),
-    ("🧾 Logs", "E4", "WinKFP error logs with explained error codes, IDENT / AIF / REF results."),
+    (LOGS_TAB_TITLE, "E4", "WinKFP error logs with explained error codes, IDENT / AIF / REF results."),
     ("💾 Presets", "E7", "Named Expert-mode presets loaded into WINKFPT.INI."),
 ]
 
@@ -100,10 +102,14 @@ class WinkfpPanel(QWidget):
 
         self.sgdat_tab = SgdatTab(self._current_paths)
         self.sgdat_tab.openPrgRequested.connect(self.openPrgRequested.emit)
+        self.logs_tab = LogsTab(self._current_paths)
 
         for title, stage, description in PLANNED_TABS[1:]:
             if title == SGDAT_TAB_TITLE:
                 self.sub_tabs.addTab(self.sgdat_tab, title)
+                continue
+            if title == LOGS_TAB_TITLE:
+                self.sub_tabs.addTab(self.logs_tab, title)
                 continue
             page = QWidget()
             page_layout = QVBoxLayout(page)
